@@ -144,10 +144,9 @@
           <input type="date" id="dateInput" class="field-input" required>
           <label class="field-label" for="timeSelect">Time</label>
           <select id="timeSelect" class="field-select" required>
-            <option value="" disabled selected>Choose a time</option>
-            <option>09:00</option><option>10:00</option><option>11:00</option>
-            <option>12:30</option><option>14:00</option><option>15:00</option><option>16:00</option>
+            <option value="" disabled selected>Choose a date first</option>
           </select>
+          <p class="field-hint">Open times are based on the salon's current business hours.</p>
           <div class="step-actions">
             <button type="button" class="btn btn-text" data-back>← Back</button>
             <button type="button" class="btn btn-primary" data-next>Continue</button>
@@ -323,6 +322,7 @@
 <script src="js/config.js"></script>
 <script src="js/services.js"></script>
 <script src="js/nav.js"></script>
+<script src="js/schedule-store.js"></script>
 <script src="js/booking.js"></script>
 <script src="js/loyalty.js"></script>
 <script src="js/vouchers.js"></script>

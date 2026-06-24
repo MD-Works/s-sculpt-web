@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S Sculpt — Admin</title>
+<meta name="robots" content="noindex, nofollow">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="admin-body">
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div class="admin-login" id="loginScreen">
+  <div class="admin-login-card">
+    <div class="admin-login-mark">SS</div>
+    <h1>S Sculpt Admin</h1>
+    <p>Enter the passcode to manage treatments and specials.</p>
+    <form id="loginForm">
+      <input class="field-input" type="password" id="passcodeInput" placeholder="Passcode" autocomplete="current-password" required>
+      <p class="admin-login-error" id="loginError"></p>
+      <button type="submit" class="btn btn-primary">Enter</button>
+    </form>
+    <p class="admin-login-note">Temporary passcode lock only — not yet connected to real account login. Real admin sign-in arrives with Supabase Auth.</p>
+  </div>
+</div>
+
+<!-- ============ ADMIN SHELL ============ -->
+<div class="admin-shell" id="adminShell" style="display:none;">
+
+  <aside class="admin-sidebar">
+    <div class="admin-brand">SS Admin <span class="admin-brand-tag">Demo data</span></div>
+
+    <a href="index.html" class="admin-view-site" target="_blank" rel="noopener">&larr; View live site</a>
+
+    <nav class="admin-nav">
+      <button class="is-active" data-panel="dashboard"><span class="nav-icon">&#9670;</span><span class="nav-label">Dashboard</span></button>
+      <button data-panel="treatments"><span class="nav-icon">&#9670;</span><span class="nav-label">Treatments</span></button>
+      <button data-panel="specials"><span class="nav-icon">&#9670;</span><span class="nav-label">Specials</span></button>
+      <button data-panel="hours"><span class="nav-icon">&#9670;</span><span class="nav-label">Hours</span></button>
+      <button data-panel="bookings"><span class="nav-icon">&#9670;</span><span class="nav-label">Bookings</span></button>
+      <button data-panel="export"><span class="nav-icon">&#9670;</span><span class="nav-label">Export</span></button>
+    </nav>
+
+    <div class="admin-sidebar-footer">
+      <button id="logoutBtn">Log out</button>
+    </div>
+  </aside>
+
+  <main class="admin-main">
+
+    <div class="admin-banner">
+      <span>&#9888;</span>
+      <span><strong>Working from saved demo data</strong> — changes here save to this browser only, for now. Once Supabase is connected, edits will go live on the real site automatically.</span>
+    </div>
+
+    <!-- DASHBOARD -->
+    <section class="admin-panel is-active" data-panel="dashboard">
+      <div class="admin-topbar">
+        <div>
+          <h2>Dashboard</h2>
+          <p>A quick look at what's currently set up.</p>
+        </div>
+      </div>
+
+      <div class="admin-stat-row">
+        <div class="admin-stat">
+          <div class="admin-stat-num" id="statTreatments">0</div>
+          <div class="admin-stat-label">Live treatments</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-num" id="statSpecials">0</div>
+          <div class="admin-stat-label">Live specials</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-num" id="statBookings">0</div>
+          <div class="admin-stat-label">Bookings made</div>
+        </div>
+      </div>
+
+      <div class="admin-card">
+        <div class="admin-card-body">
+          <p class="admin-card-name">Vouchers &amp; loyalty</p>
+          <p class="admin-card-desc">These will appear here once the Supabase database is connected. Right now that area of the public site still runs on demo data only.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TREATMENTS -->
+    <section class="admin-panel" data-panel="treatments">
+      <div class="admin-topbar">
+        <div>
+          <h2>Treatments</h2>
+          <p>Edit prices, durations and descriptions. Hide a treatment to keep it off the site without deleting it.</p>
+        </div>
+      </div>
+
+      <div class="admin-tablist">
+        <button class="is-active" data-cat="sculpt">Body sculpting</button>
+        <button data-cat="face">Face rejuvenation</button>
+      </div>
+
+      <div class="admin-list" id="treatmentList"></div>
+
+      <div class="admin-add-row">
+        <button class="btn btn-primary" id="addTreatmentBtn">+ Add treatment</button>
+      </div>
+    </section>
+
+    <!-- SPECIALS -->
+    <section class="admin-panel" data-panel="specials">
+      <div class="admin-topbar">
+        <div>
+          <h2>Specials</h2>
+          <p>Promotional offers shown in the Specials section of the site.</p>
+        </div>
+      </div>
+
+      <div class="admin-list" id="specialList"></div>
+
+      <div class="admin-add-row">
+        <button class="btn btn-primary" id="addSpecialBtn">+ Add special</button>
+      </div>
+    <!-- HOURS -->
+    <section class="admin-panel" data-panel="hours">
+      <div class="admin-topbar">
+        <div>
+          <h2>Business hours</h2>
+          <p>Set which days you're open and your hours. Customers will only see booking slots inside these windows.</p>
+        </div>
+      </div>
+
+      <div class="admin-card" style="display:block; margin-bottom: var(--space-3);">
+        <div id="hoursGrid"></div>
+      </div>
+
+      <div class="admin-card" style="display:block; margin-bottom: var(--space-3);">
+        <label class="field-label" for="slotIntervalInput">Slot length (minutes)</label>
+        <p class="field-hint" style="margin-top:0;">How far apart bookable times are spaced, e.g. every 30 minutes.</p>
+        <select class="field-select" id="slotIntervalInput" style="max-width:200px;">
+          <option value="15">15 minutes</option>
+          <option value="30">30 minutes</option>
+          <option value="60">60 minutes</option>
+        </select>
+      </div>
+
+      <div class="admin-card" style="display:block;">
+        <p class="admin-card-name">Blocked dates</p>
+        <p class="admin-card-desc" style="margin-bottom: var(--space-2);">Days off, holidays, or anything else where no bookings should be possible — even on a normally open day.</p>
+        <div class="admin-modal-row" style="margin-bottom: var(--space-2);">
+          <input type="date" class="field-input" id="blockDateInput">
+          <button class="btn btn-primary" id="addBlockDateBtn">Block this date</button>
+        </div>
+        <div class="admin-list" id="blockedDateList"></div>
+      </div>
+    </section>
+
+    <!-- BOOKINGS -->
+    <section class="admin-panel" data-panel="bookings">
+      <div class="admin-topbar">
+        <div>
+          <h2>Bookings</h2>
+          <p>All bookings made through the site so far (demo data, stored in this browser).</p>
+        </div>
+      </div>
+
+      <div class="admin-list" id="bookingList"></div>
+    </section>
+
+
+    <section class="admin-panel" data-panel="export">
+      <div class="admin-topbar">
+        <div>
+          <h2>Export</h2>
+          <p>Copy this and paste it over the <code>TREATMENTS</code> block in <code>js/config.js</code> to update the live site with your changes today.</p>
+        </div>
+      </div>
+
+      <div class="admin-card" style="margin-bottom: var(--space-2);">
+        <div class="admin-card-body">
+          <p class="admin-card-name">Why export, for now</p>
+          <p class="admin-card-desc">The site doesn't read from this admin console yet — that happens once Supabase is connected. Until then, this export is how your changes reach the real site: copy it, paste it into config.js, and re-deploy.</p>
+        </div>
+      </div>
+
+      <pre class="admin-export-box" id="exportBox"></pre>
+      <div class="admin-add-row">
+        <button class="btn btn-primary" id="copyExportBtn">Copy to clipboard</button>
+        <button class="btn btn-ghost" id="resetDataBtn">Reset all data to defaults</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="admin-toast" id="adminToast"></div>
+
+<script src="js/config.js"></script>
+<script src="js/admin-store.js"></script>
+<script src="js/schedule-store.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>
