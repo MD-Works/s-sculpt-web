@@ -21,14 +21,48 @@
   const bookingSuccessDetail = document.getElementById("bookingSuccessDetail");
   const successWhatsappBtn = document.getElementById("successWhatsappBtn");
 
-  // Minimum bookable date = tomorrow
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  dateInput.min = tomorrow.toISOString().split("T")[0];
+  // Minimum bookable date = today (slots already in the past are filtered out)
+  const today = new Date();
+  dateInput.min = today.toISOString().split("T")[0];
 
   let currentStep = 1;
   let appliedDiscount = 0; // percentage, from voucher demo codes
   let appliedVoucherLabel = "";
+
+  function durationToMinutes(treatment) {
+    // Reads the real numeric field set in config.js / the admin console.
+    // Falls back to parsing the display string only for safety, in case
+    // older data without durationMinutes is still in localStorage somewhere.
+    if (treatment && treatment.durationMinutes) return Number(treatment.durationMinutes);
+    const match = String(treatment && treatment.duration).match(/(\d+)\s*min/);
+    return match ? Number(match[1]) : 60;
+  }
+
+  function populateTimeSlots() {
+    timeSelect.innerHTML = `<option value="" disabled selected>Choose a time</option>`;
+    const t = findTreatment(treatmentSelect.value);
+    if (!dateInput.value || !t) return;
+
+    const duration = durationToMinutes(t);
+    const slots = ScheduleStore.getOpenSlots(dateInput.value, duration);
+
+    if (slots.length === 0) {
+      const opt = document.createElement("option");
+      opt.disabled = true;
+      opt.textContent = "No open slots this day — try another date";
+      timeSelect.appendChild(opt);
+      return;
+    }
+
+    slots.forEach((s) => {
+      const opt = document.createElement("option");
+      opt.value = s;
+      opt.textContent = s;
+      timeSelect.appendChild(opt);
+    });
+  }
+
+  dateInput.addEventListener("change", populateTimeSlots);
 
   function goToStep(step) {
     currentStep = step;
@@ -72,6 +106,7 @@
     if (t) {
       treatmentHint.textContent = `${t.duration} · ${formatCurrency(t.price)} · ${t.desc}`;
     }
+    populateTimeSlots();
   });
 
   function getPriceBreakdown() {
@@ -135,6 +170,20 @@
     form.querySelector(".booking-steps").style.display = "none";
     panels.forEach((p) => p.classList.remove("is-active"));
     bookingSuccess.hidden = false;
+
+    // Persist the booking so this slot is no longer offered to other customers.
+    // (Swap target for Supabase + Google Calendar — see schedule-store.js header.)
+    ScheduleStore.saveBooking({
+      date: dateInput.value,
+      time: timeSelect.value,
+      durationMinutes: durationToMinutes(treatment),
+      treatmentId: treatment.id,
+      treatmentName: treatment.name,
+      name: nameInput.value.trim(),
+      phone: phoneInput.value.trim(),
+      email: emailInput.value.trim(),
+      total,
+    });
 
     bookingSuccessDetail.textContent = `${treatment.name} on ${dateLabel} at ${timeSelect.value}, for ${formatCurrency(total)}. We'll confirm your slot shortly.`;
 
