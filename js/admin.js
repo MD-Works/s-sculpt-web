@@ -1,27 +1,35 @@
 // ============================================
 // ADMIN CONSOLE LOGIC
+// ------------------------------------------------
+// All data calls are now real, async Supabase requests
+// (TreatmentStore, DataStore, ScheduleStore). Function names
+// and markup are unchanged from the localStorage version —
+// every render function is now `async` and awaited at its
+// call site, since a real database round-trip can't be
+// synchronous the way localStorage was.
 // ============================================
 
-// ---------- Auth (placeholder only — NOT real security) ----------
-// This just keeps casual visitors from stumbling into the console.
-// Real protection arrives with Supabase Auth (see HANDOFF.md step 3).
-const ADMIN_PASSCODE = "ssculpt2026";
-const SESSION_KEY = "ssculpt_admin_session";
-
+// ---------- Auth (real Supabase Auth) ----------
+// One admin user (her), created once in Supabase Dashboard ->
+// Authentication -> Users -> Add user. Sign-in here gets a real
+// JWT with role "authenticated", which is what every admin RLS
+// policy in schema.sql checks for.
 function isLoggedIn() {
-  return sessionStorage.getItem(SESSION_KEY) === "yes";
+  return !!currentSession;
 }
 
-function doLogin(passcode) {
-  if (passcode === ADMIN_PASSCODE) {
-    sessionStorage.setItem(SESSION_KEY, "yes");
-    return true;
-  }
-  return false;
+let currentSession = null;
+
+async function doLogin(email, password) {
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) return error.message;
+  currentSession = data.session;
+  return null;
 }
 
-function doLogout() {
-  sessionStorage.removeItem(SESSION_KEY);
+async function doLogout() {
+  await sb.auth.signOut();
+  currentSession = null;
   showLogin();
 }
 
@@ -30,15 +38,11 @@ function showLogin() {
   document.getElementById("adminShell").style.display = "none";
 }
 
-function showShell() {
+async function showShell() {
   document.getElementById("loginScreen").style.display = "none";
   document.getElementById("adminShell").style.display = "grid";
-  renderTreatments("sculpt");
-  renderSpecials();
-  renderStats();
-  renderHours();
-  renderBlockedDates();
-  renderBookings();
+  await Promise.all([renderTreatments("sculpt"), renderSpecials(), renderHours(), renderBlockedDates(), renderBookings()]);
+  await renderStats();
 }
 
 // ---------- Toast ----------
@@ -59,20 +63,20 @@ function switchPanel(panelKey) {
   document.querySelectorAll(".admin-nav button").forEach((b) => {
     b.classList.toggle("is-active", b.dataset.panel === panelKey);
   });
-  if (panelKey === "export") renderExport();
 }
 
 // ---------- Treatments ----------
 let activeTreatmentTab = "sculpt";
 
-function renderTreatments(category) {
+async function renderTreatments(category) {
   activeTreatmentTab = category;
   document.querySelectorAll(".admin-tablist button").forEach((b) => {
     b.classList.toggle("is-active", b.dataset.cat === category);
   });
 
   const list = document.getElementById("treatmentList");
-  const items = DataStore.getTreatments(category);
+  list.innerHTML = `<div class="admin-empty">Loading…</div>`;
+  const items = await TreatmentStore.getTreatments(category);
   list.innerHTML = "";
 
   if (items.length === 0) {
@@ -101,9 +105,9 @@ function renderTreatments(category) {
   });
 }
 
-function openTreatmentModal(id) {
+async function openTreatmentModal(id) {
   const isEdit = !!id;
-  const t = isEdit ? DataStore.getTreatments().find((x) => x.id === id) : null;
+  const t = isEdit ? (await TreatmentStore.getTreatments()).find((x) => x.id === id) : null;
 
   const modal = buildModal(`
     <h3>${isEdit ? "Edit treatment" : "Add treatment"}</h3>
@@ -140,7 +144,7 @@ function openTreatmentModal(id) {
     </div>
   `);
 
-  modal.querySelector("#mSaveBtn").addEventListener("click", () => {
+  modal.querySelector("#mSaveBtn").addEventListener("click", async () => {
     const name = modal.querySelector("#mName").value.trim();
     const price = modal.querySelector("#mPrice").value;
     const durationMinutes = modal.querySelector("#mDuration").value;
@@ -153,7 +157,11 @@ function openTreatmentModal(id) {
       return;
     }
 
-    DataStore.saveTreatment({
+    const saveBtn = modal.querySelector("#mSaveBtn");
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+
+    const result = await TreatmentStore.saveTreatment({
       id: id || undefined,
       name,
       price: Number(price),
@@ -164,17 +172,27 @@ function openTreatmentModal(id) {
       active: t ? t.active : true,
     });
 
+    if (!result) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = isEdit ? "Save changes" : "Add treatment";
+      toast("Couldn't save — check you're logged in as admin (see Database panel).");
+      return;
+    }
+
     closeModal();
-    renderTreatments(category);
-    renderStats();
+    await renderTreatments(category);
+    await renderStats();
     toast(isEdit ? "Treatment updated." : "Treatment added.");
   });
 }
 
 // ---------- Specials ----------
-function renderSpecials() {
+// Schema's `specials` table has a single `message` column (the homepage
+// ticker just shows "✦ message"), so this is one field, not title+description.
+async function renderSpecials() {
   const list = document.getElementById("specialList");
-  const items = DataStore.getSpecials();
+  list.innerHTML = `<div class="admin-empty">Loading…</div>`;
+  const items = await DataStore.getSpecials();
   list.innerHTML = "";
 
   if (items.length === 0) {
@@ -187,10 +205,9 @@ function renderSpecials() {
     card.className = `admin-card${s.active === false ? " is-inactive" : ""}`;
     card.innerHTML = `
       <div class="admin-card-body">
-        <p class="admin-card-name">${escapeHtml(s.title)}${
+        <p class="admin-card-name">${escapeHtml(s.message)}${
           s.active === false ? '<span class="admin-pill">Hidden</span>' : '<span class="admin-pill is-on">Live</span>'
         }</p>
-        <p class="admin-card-desc">${escapeHtml(s.description || "")}</p>
       </div>
       <div class="admin-card-actions">
         <button class="btn btn-ghost btn-sm" data-action="edit-special" data-id="${s.id}">Edit</button>
@@ -202,17 +219,15 @@ function renderSpecials() {
   });
 }
 
-function openSpecialModal(id) {
+async function openSpecialModal(id) {
   const isEdit = !!id;
-  const s = isEdit ? DataStore.getSpecials().find((x) => x.id === id) : null;
+  const s = isEdit ? (await DataStore.getSpecials()).find((x) => x.id === id) : null;
 
   const modal = buildModal(`
     <h3>${isEdit ? "Edit special" : "Add special"}</h3>
-    <label class="field-label">Title</label>
-    <input class="field-input" id="mTitle" value="${s ? escapeAttr(s.title) : ""}" placeholder="e.g. Slimming & Sculpting Promo">
-
-    <label class="field-label">Description</label>
-    <textarea class="field-input" id="mSDesc" placeholder="What the special offers">${s ? escapeHtml(s.description || "") : ""}</textarea>
+    <label class="field-label">Ticker message</label>
+    <textarea class="field-input" id="mSDesc" placeholder="e.g. R2500 for 6x 120min sessions per body area">${s ? escapeHtml(s.message || "") : ""}</textarea>
+    <p class="field-hint" style="margin-top:0.3rem;">Shown on the homepage scrolling ticker as "✦ your message".</p>
 
     <div class="admin-modal-actions">
       <button class="btn btn-ghost" data-action="close-modal">Cancel</button>
@@ -220,32 +235,38 @@ function openSpecialModal(id) {
     </div>
   `);
 
-  modal.querySelector("#mSpecialSaveBtn").addEventListener("click", () => {
-    const title = modal.querySelector("#mTitle").value.trim();
-    const description = modal.querySelector("#mSDesc").value.trim();
+  modal.querySelector("#mSpecialSaveBtn").addEventListener("click", async () => {
+    const message = modal.querySelector("#mSDesc").value.trim();
 
-    if (!title) {
-      toast("Please give the special a title.");
+    if (!message) {
+      toast("Please write the ticker message.");
       return;
     }
 
-    DataStore.saveSpecial({
-      id: id || undefined,
-      title,
-      description,
-      active: s ? s.active : true,
-    });
+    const saveBtn = modal.querySelector("#mSpecialSaveBtn");
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+
+    const result = await DataStore.saveSpecial({ id: id || undefined, message });
+
+    if (!result) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = isEdit ? "Save changes" : "Add special";
+      toast("Couldn't save — check you're logged in as admin (see Database panel).");
+      return;
+    }
 
     closeModal();
-    renderSpecials();
+    await renderSpecials();
     toast(isEdit ? "Special updated." : "Special added.");
   });
 }
 
 // ---------- Hours ----------
-function renderHours() {
+async function renderHours() {
   const grid = document.getElementById("hoursGrid");
-  const hours = ScheduleStore.getHours();
+  grid.innerHTML = `<div class="admin-empty">Loading…</div>`;
+  const hours = await ScheduleStore.getHours();
   grid.innerHTML = "";
 
   // Order Monday-first for a more natural business view, Sunday last.
@@ -271,10 +292,10 @@ function renderHours() {
     grid.appendChild(row);
   });
 
-  document.getElementById("slotIntervalInput").value = String(ScheduleStore.getSlotInterval());
+  document.getElementById("slotIntervalInput").value = String(await ScheduleStore.getSlotInterval());
 }
 
-function saveDayFromRow(day) {
+async function saveDayFromRow(day) {
   const openEl = document.querySelector(`.dayOpenToggle[data-day="${day}"]`);
   const startEl = document.querySelector(`.dayStart[data-day="${day}"]`);
   const endEl = document.querySelector(`.dayEnd[data-day="${day}"]`);
@@ -282,23 +303,24 @@ function saveDayFromRow(day) {
 
   if (endEl.value <= startEl.value) {
     toast("Closing time must be after opening time.");
-    renderHours();
+    await renderHours();
     return;
   }
 
-  ScheduleStore.setDayHours(Number(day), {
+  await ScheduleStore.setDayHours(Number(day), {
     open: openEl.checked,
     start: startEl.value,
     end: endEl.value,
   });
-  renderHours();
+  await renderHours();
   toast("Hours updated.");
 }
 
 // ---------- Blocked dates ----------
-function renderBlockedDates() {
+async function renderBlockedDates() {
   const list = document.getElementById("blockedDateList");
-  const dates = ScheduleStore.getBlockedDates();
+  list.innerHTML = `<div class="admin-empty">Loading…</div>`;
+  const dates = await ScheduleStore.getBlockedDates();
   list.innerHTML = "";
 
   if (dates.length === 0) {
@@ -321,9 +343,10 @@ function renderBlockedDates() {
 }
 
 // ---------- Bookings ----------
-function renderBookings() {
+async function renderBookings() {
   const list = document.getElementById("bookingList");
-  const bookings = ScheduleStore.getAllBookings();
+  list.innerHTML = `<div class="admin-empty">Loading…</div>`;
+  const bookings = await ScheduleStore.getAllBookings();
   list.innerHTML = "";
 
   if (bookings.length === 0) {
@@ -352,27 +375,15 @@ function renderBookings() {
   });
 }
 
-
-function renderStats() {
-  const treatments = DataStore.getTreatments();
-  const specials = DataStore.getSpecials();
-  const bookings = typeof ScheduleStore !== "undefined" ? ScheduleStore.getAllBookings() : [];
+async function renderStats() {
+  const [treatments, specials, bookings] = await Promise.all([
+    TreatmentStore.getTreatments(),
+    DataStore.getSpecials(),
+    ScheduleStore.getAllBookings(),
+  ]);
   document.getElementById("statTreatments").textContent = treatments.filter((t) => t.active !== false).length;
   document.getElementById("statSpecials").textContent = specials.filter((s) => s.active !== false).length;
   document.getElementById("statBookings").textContent = bookings.filter((b) => b.status !== "cancelled").length;
-}
-
-// ---------- Export ----------
-function renderExport() {
-  document.getElementById("exportBox").textContent = DataStore.exportAsConfigJs();
-}
-
-function copyExport() {
-  const text = DataStore.exportAsConfigJs();
-  navigator.clipboard.writeText(text).then(
-    () => toast("Copied — paste into js/config.js"),
-    () => toast("Couldn't copy automatically, please select and copy manually.")
-  );
 }
 
 // ---------- Modal helpers ----------
@@ -406,24 +417,33 @@ function escapeAttr(str) {
 }
 
 // ---------- Wire up ----------
-document.addEventListener("DOMContentLoaded", () => {
-  // Login
+document.addEventListener("DOMContentLoaded", async () => {
+  // Login — check for an existing real Supabase session first.
   const loginForm = document.getElementById("loginForm");
-  if (isLoggedIn()) {
+  const { data } = await sb.auth.getSession();
+  if (data.session) {
+    currentSession = data.session;
     showShell();
   } else {
     showLogin();
   }
 
-  loginForm.addEventListener("submit", (e) => {
+  loginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const val = document.getElementById("passcodeInput").value;
+    const email = document.getElementById("emailInput").value.trim();
+    const password = document.getElementById("passcodeInput").value;
     const errEl = document.getElementById("loginError");
-    if (doLogin(val)) {
+    const submitBtn = loginForm.querySelector('button[type="submit"]');
+
+    submitBtn.disabled = true;
+    const errorMsg = await doLogin(email, password);
+    submitBtn.disabled = false;
+
+    if (!errorMsg) {
       errEl.textContent = "";
       showShell();
     } else {
-      errEl.textContent = "Incorrect passcode. Try again.";
+      errEl.textContent = "Login failed — check your email and password.";
     }
   });
 
@@ -441,7 +461,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("addTreatmentBtn").addEventListener("click", () => openTreatmentModal(null));
   document.getElementById("addSpecialBtn").addEventListener("click", () => openSpecialModal(null));
-  document.getElementById("copyExportBtn").addEventListener("click", copyExport);
 
   // Hours panel
   document.getElementById("hoursGrid").addEventListener("change", (e) => {
@@ -459,39 +478,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  document.getElementById("slotIntervalInput").addEventListener("change", (e) => {
-    ScheduleStore.setSlotInterval(e.target.value);
+  document.getElementById("slotIntervalInput").addEventListener("change", async (e) => {
+    await ScheduleStore.setSlotInterval(e.target.value);
     toast("Slot length updated.");
   });
 
-  document.getElementById("addBlockDateBtn").addEventListener("click", () => {
+  document.getElementById("addBlockDateBtn").addEventListener("click", async () => {
     const input = document.getElementById("blockDateInput");
     if (!input.value) {
       toast("Pick a date first.");
       return;
     }
-    ScheduleStore.addBlockedDate(input.value);
+    await ScheduleStore.addBlockedDate(input.value);
     input.value = "";
-    renderBlockedDates();
+    await renderBlockedDates();
     toast("Date blocked.");
   });
 
-  document.getElementById("resetDataBtn").addEventListener("click", () => {
-    if (confirm("This resets all treatments, specials, hours and bookings back to defaults. Continue?")) {
-      DataStore.resetToDefaults();
-      ScheduleStore.resetToDefaults();
-      renderTreatments(activeTreatmentTab);
-      renderSpecials();
-      renderStats();
-      renderHours();
-      renderBlockedDates();
-      renderBookings();
-      toast("Data reset to defaults.");
-    }
-  });
-
   // Delegated clicks for card actions + modal close
-  document.body.addEventListener("click", (e) => {
+  document.body.addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-action]");
     if (!btn) return;
     const id = btn.dataset.id;
@@ -502,44 +507,47 @@ document.addEventListener("DOMContentLoaded", () => {
         break;
       case "delete-treatment":
         if (confirm("Delete this treatment? This can't be undone.")) {
-          DataStore.deleteTreatment(id);
-          renderTreatments(activeTreatmentTab);
-          renderStats();
+          await TreatmentStore.deleteTreatment(id);
+          await renderTreatments(activeTreatmentTab);
+          await renderStats();
           toast("Treatment deleted.");
         }
         break;
       case "toggle-treatment":
-        DataStore.toggleTreatmentActive(id);
-        renderTreatments(activeTreatmentTab);
-        renderStats();
+        await TreatmentStore.toggleTreatmentActive(id);
+        await renderTreatments(activeTreatmentTab);
+        await renderStats();
         break;
       case "edit-special":
         openSpecialModal(id);
         break;
       case "delete-special":
         if (confirm("Delete this special? This can't be undone.")) {
-          DataStore.deleteSpecial(id);
-          renderSpecials();
+          await DataStore.deleteSpecial(id);
+          await renderSpecials();
           toast("Special deleted.");
         }
         break;
       case "toggle-special":
-        DataStore.toggleSpecialActive(id);
-        renderSpecials();
+        await DataStore.toggleSpecialActive(id);
+        await renderSpecials();
         break;
       case "close-modal":
         closeModal();
         break;
       case "unblock-date":
-        ScheduleStore.removeBlockedDate(btn.dataset.date);
-        renderBlockedDates();
+        await ScheduleStore.removeBlockedDate(btn.dataset.date);
+        await renderBlockedDates();
         toast("Date unblocked.");
         break;
       case "cancel-booking":
         if (confirm("Cancel this booking? The slot will become available again.")) {
-          ScheduleStore.cancelBooking(id);
-          renderBookings();
-          renderStats();
+          await ScheduleStore.cancelBooking(id);
+          sb.functions.invoke("calendar-sync", { body: { booking_id: id, action: "cancel" } }).catch((err) => {
+            console.error("Calendar event removal failed:", err);
+          });
+          await renderBookings();
+          await renderStats();
           toast("Booking cancelled.");
         }
         break;

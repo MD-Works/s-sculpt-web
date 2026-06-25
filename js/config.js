@@ -1,5 +1,10 @@
 // ============================================
-// CONFIG — change brand name / treatments here only
+// CONFIG — brand settings only.
+// ------------------------------------------------
+// Treatments used to be hardcoded here as TREATMENTS / ALL_TREATMENTS.
+// They now live in the Supabase `treatments` table and are fetched
+// by services.js / booking.js via TreatmentStore (see js/treatment-store.js).
+// Edit treatments from the admin console, not this file.
 // ============================================
 const SITE_CONFIG = {
   brandName: "S Sculpt",
@@ -15,82 +20,18 @@ document.querySelectorAll("[data-brand-name]").forEach((el) => {
 });
 document.title = `${SITE_CONFIG.brandName} — Slimming & Face Rejuvenation`;
 
-const TREATMENTS = {
-  sculpt: [
-    {
-      id: "sculpt-package",
-      name: "Slimming & Sculpting Package",
-      duration: "6 x 120 min",
-      durationMinutes: 120, // one session booked at a time; "6 x" is sessions, not calendar duration
-      price: 2500,
-      desc: "6 sessions of 120 minutes, per body area — abdomen, flanks, hips, thighs, upper arms, buttocks, back or legs. Our signature package.",
-    },
-    {
-      id: "sculpt-cellulite",
-      name: "Cellulite & Scarring Treatment",
-      duration: "120 min",
-      durationMinutes: 120,
-      price: 450,
-      desc: "Targeted treatment to reduce cellulite appearance and improve scar texture.",
-    },
-    {
-      id: "sculpt-cavitation",
-      name: "Ultrasonic Cavitation",
-      duration: "120 min",
-      durationMinutes: 120,
-      price: 450,
-      desc: "Non-invasive fat-cell breakdown treatment for stubborn areas.",
-    },
-    {
-      id: "sculpt-rf",
-      name: "Radio Frequency",
-      duration: "120 min",
-      durationMinutes: 120,
-      price: 450,
-      desc: "Skin-firming radio frequency treatment, smooths and tightens treated areas.",
-    },
-    {
-      id: "sculpt-laser",
-      name: "Laser Lipolysis",
-      duration: "120 min",
-      durationMinutes: 120,
-      price: 450,
-      desc: "Laser-based fat reduction treatment for precise body contouring.",
-    },
-    {
-      id: "sculpt-vacuum",
-      name: "Vacuum Body Sculpting",
-      duration: "120 min",
-      durationMinutes: 120,
-      price: 450,
-      desc: "Vacuum-suction sculpting treatment to smooth and contour the body.",
-    },
-  ],
-  // PLACEHOLDER — replace with real facial treatments flyer once available.
-  // Currently using R600/session as seen in the WhatsApp screenshot.
-  face: [
-    {
-      id: "face-rejuv",
-      name: "Face Rejuvenation Facial",
-      duration: "60 min",
-      durationMinutes: 60,
-      price: 600,
-      desc: "Facial rejuvenation treatment. (Placeholder — update with real treatment details.)",
-    },
-  ],
-};
-
-// Flatten for easy lookup by id
-const ALL_TREATMENTS = [...TREATMENTS.sculpt, ...TREATMENTS.face];
-
-function findTreatment(id) {
-  return ALL_TREATMENTS.find((t) => t.id === id);
-}
-
 function formatCurrency(amount) {
-  return `${SITE_CONFIG.currency}${amount.toLocaleString("en-ZA")}`;
+  return `${SITE_CONFIG.currency}${Number(amount).toLocaleString("en-ZA")}`;
 }
 
 function waLink(message) {
   return `https://wa.me/${SITE_CONFIG.whatsappNumber}?text=${encodeURIComponent(message)}`;
+}
+
+// Builds the same "6 x 120 min" / "120 min" display string the UI expects,
+// from the real numeric columns in the database.
+function buildDurationLabel(durationMinutes, sessionsCount) {
+  const mins = Number(durationMinutes) || 60;
+  const sessions = Number(sessionsCount) || 1;
+  return sessions > 1 ? `${sessions} x ${mins} min` : `${mins} min`;
 }

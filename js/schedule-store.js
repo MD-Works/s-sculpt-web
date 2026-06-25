@@ -1,68 +1,22 @@
 // ============================================
 // SCHEDULE STORE
 // ------------------------------------------------
-// Handles business hours, blocked dates, and bookings,
-// and computes open slots from them.
+// Business hours, blocked dates, settings and bookings —
+// now backed by Supabase tables (business_hours, blocked_dates,
+// salon_settings, bookings) instead of localStorage.
 //
-// SWAP PLAN (see HANDOFF.md step 9):
-// Once the Google Calendar Edge Function exists, replace
-// the body of getOpenSlots() with a call to that function
-// (it will return real free/busy from her actual calendar
-// instead of computing it from local bookings). Keep the
-// function signature and return shape identical — nothing
-// in booking.js or admin.js needs to change.
-//
-// Replace saveBooking() with a Supabase insert once that
-// table exists — same idea, same return shape.
+// FUTURE SWAP (see HANDOFF.md): once Google Calendar sync exists,
+// getOpenSlots() becomes a call to a Supabase Edge Function that
+// checks her real calendar instead of just the bookings table.
+// Keep the function signature and return shape identical when
+// that happens — nothing in booking.js or admin.js should need
+// to change beyond that one function's internals.
 // ============================================
-
-const SCHEDULE_KEY = "ssculpt_schedule_v1";
 
 const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-function defaultScheduleData() {
-  return {
-    // 0 = Sunday ... 6 = Saturday
-    hours: {
-      0: { open: false, start: "09:00", end: "13:00" },
-      1: { open: true, start: "09:00", end: "17:00" },
-      2: { open: true, start: "09:00", end: "17:00" },
-      3: { open: true, start: "09:00", end: "17:00" },
-      4: { open: true, start: "09:00", end: "17:00" },
-      5: { open: true, start: "09:00", end: "17:00" },
-      6: { open: true, start: "09:00", end: "13:00" },
-    },
-    slotIntervalMinutes: 30,
-    blockedDates: [], // array of "YYYY-MM-DD" strings — her days off / holidays
-    bookings: [], // { id, date, time, durationMinutes, treatmentId, name, phone }
-  };
-}
-
-function loadSchedule() {
-  try {
-    const raw = localStorage.getItem(SCHEDULE_KEY);
-    if (!raw) {
-      const fresh = defaultScheduleData();
-      localStorage.setItem(SCHEDULE_KEY, JSON.stringify(fresh));
-      return fresh;
-    }
-    const parsed = JSON.parse(raw);
-    // normalize keys to strings->numbers in case of older saved data
-    return parsed;
-  } catch (e) {
-    console.error("Schedule store read failed, resetting to defaults", e);
-    const fresh = defaultScheduleData();
-    localStorage.setItem(SCHEDULE_KEY, JSON.stringify(fresh));
-    return fresh;
-  }
-}
-
-function saveSchedule(data) {
-  localStorage.setItem(SCHEDULE_KEY, JSON.stringify(data));
-}
-
 function timeToMinutes(t) {
-  const [h, m] = t.split(":").map(Number);
+  const [h, m] = String(t).split(":").map(Number);
   return h * 60 + m;
 }
 function minutesToTime(mins) {
@@ -70,104 +24,162 @@ function minutesToTime(mins) {
   const m = (mins % 60).toString().padStart(2, "0");
   return `${h}:${m}`;
 }
+// Supabase returns time columns as "HH:MM:SS" — trim to "HH:MM" for the UI.
+function trimSeconds(t) {
+  return String(t).slice(0, 5);
+}
+
+function normalizeBookingRow(row) {
+  return {
+    id: row.id,
+    treatmentId: row.treatment_id,
+    date: row.booking_date,
+    time: trimSeconds(row.booking_time),
+    name: row.customer_name,
+    phone: row.customer_phone,
+    email: row.customer_email,
+    total: Number(row.price_charged),
+    status: row.status,
+    voucherId: row.voucher_id,
+    paymentMethod: row.payment_method,
+    paymentStatus: row.payment_status,
+  };
+}
 
 const ScheduleStore = {
   WEEKDAY_LABELS,
 
   // ---------- Hours ----------
-  getHours() {
-    return loadSchedule().hours;
+  // Returns { 0: {open, start, end}, ..., 6: {...} } keyed by weekday number.
+  async getHours() {
+    const { data, error } = await sb.from("business_hours").select("*");
+    if (error) return handleSbError(error, {});
+    const hours = {};
+    data.forEach((row) => {
+      hours[row.weekday] = { open: row.is_open, start: trimSeconds(row.start_time), end: trimSeconds(row.end_time) };
+    });
+    return hours;
   },
 
-  setDayHours(weekday, { open, start, end }) {
-    const data = loadSchedule();
-    data.hours[weekday] = { open, start, end };
-    saveSchedule(data);
+  async setDayHours(weekday, { open, start, end }) {
+    const { error } = await sb
+      .from("business_hours")
+      .update({ is_open: open, start_time: start, end_time: end })
+      .eq("weekday", weekday);
+    if (error) handleSbError(error, null);
   },
 
-  getSlotInterval() {
-    return loadSchedule().slotIntervalMinutes;
+  async getSlotInterval() {
+    const { data, error } = await sb.from("salon_settings").select("slot_interval_minutes").eq("id", true).maybeSingle();
+    if (error || !data) return handleSbError(error, 30);
+    return data.slot_interval_minutes;
   },
 
-  setSlotInterval(minutes) {
-    const data = loadSchedule();
-    data.slotIntervalMinutes = Number(minutes);
-    saveSchedule(data);
+  async setSlotInterval(minutes) {
+    const { error } = await sb
+      .from("salon_settings")
+      .update({ slot_interval_minutes: Number(minutes) })
+      .eq("id", true);
+    if (error) handleSbError(error, null);
   },
 
   // ---------- Blocked dates ----------
-  getBlockedDates() {
-    return loadSchedule().blockedDates;
+  async getBlockedDates() {
+    const { data, error } = await sb.from("blocked_dates").select("blocked_date").order("blocked_date", { ascending: true });
+    if (error) return handleSbError(error, []);
+    return data.map((r) => r.blocked_date);
   },
 
-  addBlockedDate(dateStr) {
-    const data = loadSchedule();
-    if (!data.blockedDates.includes(dateStr)) {
-      data.blockedDates.push(dateStr);
-      data.blockedDates.sort();
-      saveSchedule(data);
-    }
+  async addBlockedDate(dateStr) {
+    const { error } = await sb.from("blocked_dates").insert({ blocked_date: dateStr });
+    // Ignore duplicate-date conflicts quietly; anything else gets logged.
+    if (error && error.code !== "23505") handleSbError(error, null);
   },
 
-  removeBlockedDate(dateStr) {
-    const data = loadSchedule();
-    data.blockedDates = data.blockedDates.filter((d) => d !== dateStr);
-    saveSchedule(data);
+  async removeBlockedDate(dateStr) {
+    const { error } = await sb.from("blocked_dates").delete().eq("blocked_date", dateStr);
+    if (error) handleSbError(error, null);
   },
 
   // ---------- Bookings ----------
-  getBookingsForDate(dateStr) {
-    return loadSchedule().bookings.filter((b) => b.date === dateStr);
+  // Joins treatments to get each booking's own duration, so overlap
+  // checks use the real width of every existing booking (not the
+  // duration of whatever new treatment is currently being booked).
+  async getBookingsForDate(dateStr) {
+    const { data, error } = await sb
+      .from("bookings")
+      .select("*, treatments(duration_minutes)")
+      .eq("booking_date", dateStr);
+    if (error) return handleSbError(error, []);
+    return data.map((row) => ({
+      ...normalizeBookingRow(row),
+      durationMinutes: row.treatments ? row.treatments.duration_minutes : 60,
+    }));
   },
 
-  getAllBookings() {
-    return loadSchedule().bookings.slice().sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  async getAllBookings() {
+    const { data, error } = await sb
+      .from("bookings")
+      .select("*, treatments(name)")
+      .order("booking_date", { ascending: true })
+      .order("booking_time", { ascending: true });
+    if (error) return handleSbError(error, []);
+    return data.map((row) => ({
+      ...normalizeBookingRow(row),
+      treatmentName: row.treatments ? row.treatments.name : "Treatment",
+    }));
   },
 
-  saveBooking(booking) {
-    const data = loadSchedule();
-    const newBooking = {
-      id: `bk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+  async saveBooking(booking) {
+    const row = {
+      treatment_id: booking.treatmentId,
+      customer_name: booking.name,
+      customer_phone: booking.phone,
+      customer_email: booking.email || null,
+      booking_date: booking.date,
+      booking_time: booking.time,
       status: "confirmed",
-      ...booking,
+      price_charged: booking.total,
+      voucher_id: booking.voucherId || null,
+      payment_method: booking.paymentMethod || null,
+      whatsapp_opt_in: booking.whatsappOptIn !== false,
     };
-    data.bookings.push(newBooking);
-    saveSchedule(data);
-    return newBooking;
+
+    const { data, error } = await sb.from("bookings").insert(row).select().single();
+    if (error) return handleSbError(error, null);
+    return { ...normalizeBookingRow(data), treatmentName: booking.treatmentName };
   },
 
-  cancelBooking(id) {
-    const data = loadSchedule();
-    const b = data.bookings.find((x) => x.id === id);
-    if (b) {
-      b.status = "cancelled";
-      saveSchedule(data);
-    }
-    return b;
+  async cancelBooking(id) {
+    const { data, error } = await sb.from("bookings").update({ status: "cancelled" }).eq("id", id).select().single();
+    if (error) return handleSbError(error, null);
+    return normalizeBookingRow(data);
   },
 
   // ---------- Slot computation ----------
   // Returns an array of "HH:MM" strings: every slot start time on
   // dateStr where a treatment of durationMinutes would fit, given
   // business hours, blocked dates, and existing confirmed bookings.
-  getOpenSlots(dateStr, durationMinutes) {
-    const data = loadSchedule();
-
-    if (data.blockedDates.includes(dateStr)) return [];
+  async getOpenSlots(dateStr, durationMinutes) {
+    const blocked = await this.getBlockedDates();
+    if (blocked.includes(dateStr)) return [];
 
     // Avoid timezone drift: parse the date string as local, not UTC.
     const [y, m, d] = dateStr.split("-").map(Number);
     const weekday = new Date(y, m - 1, d).getDay();
-    const dayHours = data.hours[weekday];
+
+    const hours = await this.getHours();
+    const dayHours = hours[weekday];
     if (!dayHours || !dayHours.open) return [];
 
-    const interval = data.slotIntervalMinutes || 30;
+    const interval = (await this.getSlotInterval()) || 30;
     const dayStart = timeToMinutes(dayHours.start);
     const dayEnd = timeToMinutes(dayHours.end);
     const duration = durationMinutes || 60;
 
-    const existingRanges = data.bookings
-      .filter((b) => b.date === dateStr && b.status !== "cancelled")
+    const dayBookings = await this.getBookingsForDate(dateStr);
+    const existingRanges = dayBookings
+      .filter((b) => b.status !== "cancelled")
       .map((b) => {
         const start = timeToMinutes(b.time);
         return { start, end: start + (b.durationMinutes || 60) };
@@ -186,11 +198,5 @@ const ScheduleStore = {
       if (!overlaps) slots.push(minutesToTime(start));
     }
     return slots;
-  },
-
-  resetToDefaults() {
-    const fresh = defaultScheduleData();
-    saveSchedule(fresh);
-    return fresh;
   },
 };

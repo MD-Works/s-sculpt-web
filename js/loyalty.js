@@ -1,16 +1,22 @@
 // ============================================
-// LOYALTY — points ring, tiers, localStorage demo
+// LOYALTY — points ring, tiers, real Supabase data
+// ------------------------------------------------
+// Loyalty is keyed by phone number (no customer accounts).
+// The ring shows nothing until a phone number is looked up
+// via the "Check my points" field — there is no meaningful
+// anonymous default anymore, since points belong to a real
+// person's booking history, not to whoever is on this browser.
 // ============================================
 (function () {
-  const STORAGE_KEY = "s-sculpt:loyalty-points";
   const RING_CIRCUMFERENCE = 2 * Math.PI * 84; // r=84
 
   const ringFg = document.getElementById("loyaltyRingFg");
   const pointsDisplay = document.getElementById("loyaltyPointsDisplay");
   const tierDisplay = document.getElementById("loyaltyTierDisplay");
   const nextDisplay = document.getElementById("loyaltyNextDisplay");
-  const addVisitBtn = document.getElementById("addVisitBtn");
-  const resetBtn = document.getElementById("resetLoyaltyBtn");
+  const lookupInput = document.getElementById("loyaltyLookupInput");
+  const lookupBtn = document.getElementById("loyaltyLookupBtn");
+  const lookupFeedback = document.getElementById("loyaltyLookupFeedback");
 
   const TIERS = [
     { name: "Bronze", min: 0, max: 199 },
@@ -18,21 +24,11 @@
     { name: "Gold", min: 500, max: Infinity },
   ];
 
-  function getPoints() {
-    return Number(localStorage.getItem(STORAGE_KEY) || 0);
-  }
-
-  function setPoints(value) {
-    localStorage.setItem(STORAGE_KEY, String(value));
-    render();
-  }
-
   function getTier(points) {
     return TIERS.find((t) => points >= t.min && points <= t.max);
   }
 
-  function render() {
-    const points = getPoints();
+  function render(points) {
     const tier = getTier(points);
     const cappedForRing = Math.min(points, 500);
     const ringFraction = cappedForRing / 500;
@@ -51,16 +47,45 @@
     }
   }
 
-  function addSpend(amountRand) {
-    const earned = Math.floor(amountRand / 10); // 1 point per R10
-    setPoints(getPoints() + earned);
+  async function getBalance(phone) {
+    const { data, error } = await sb.from("loyalty_balances").select("balance").eq("customer_phone", phone).maybeSingle();
+    if (error) return handleSbError(error, 0);
+    return data ? Number(data.balance) : 0;
   }
 
-  addVisitBtn.addEventListener("click", () => addSpend(450));
-  resetBtn.addEventListener("click", () => setPoints(0));
+  // 1 point per R10 spent, recorded as a real ledger row tied to the booking.
+  async function addSpend(phone, name, amountRand, bookingId) {
+    const earned = Math.floor(amountRand / 10);
+    if (earned <= 0) return;
+    const { error } = await sb.from("loyalty_transactions").insert({
+      customer_phone: phone,
+      customer_name: name,
+      points_delta: earned,
+      reason: "booking",
+      related_booking_id: bookingId || null,
+    });
+    if (error) handleSbError(error, null);
+  }
 
-  render();
+  if (lookupBtn) {
+    lookupBtn.addEventListener("click", async () => {
+      const phone = lookupInput.value.trim();
+      if (!phone) {
+        lookupFeedback.textContent = "Enter the phone number used at booking.";
+        return;
+      }
+      lookupBtn.disabled = true;
+      lookupFeedback.textContent = "Checking…";
+      const points = await getBalance(phone);
+      lookupBtn.disabled = false;
+      lookupFeedback.textContent = points > 0 ? "" : "No points found yet for this number — they appear after your first booking.";
+      render(points);
+    });
+  }
 
-  // Expose for booking.js to call after a confirmed booking
-  window.SSculptLoyalty = { addSpend, getPoints };
+  // Start at zero/Bronze until a real lookup happens.
+  render(0);
+
+  // Exposed for booking.js to call right after a confirmed booking.
+  window.SSculptLoyalty = { addSpend, getBalance };
 })();

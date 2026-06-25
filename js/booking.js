@@ -1,5 +1,11 @@
 // ============================================
 // BOOKING — multi-step form
+// ------------------------------------------------
+// Slot availability and treatment lookups are now async
+// (real Supabase calls via schedule-store.js / services.js's
+// findTreatment cache). Voucher codes are checked against the
+// real `vouchers` table; a valid unredeemed voucher is applied
+// as a discount and gets marked redeemed once the booking saves.
 // ============================================
 (function () {
   const form = document.getElementById("bookingForm");
@@ -20,32 +26,35 @@
   const bookingSuccess = document.getElementById("bookingSuccess");
   const bookingSuccessDetail = document.getElementById("bookingSuccessDetail");
   const successWhatsappBtn = document.getElementById("successWhatsappBtn");
+  const confirmBookingBtn = document.getElementById("confirmBookingBtn");
 
   // Minimum bookable date = today (slots already in the past are filtered out)
   const today = new Date();
   dateInput.min = today.toISOString().split("T")[0];
 
   let currentStep = 1;
-  let appliedDiscount = 0; // percentage, from voucher demo codes
+  let appliedDiscountAmount = 0; // rand amount, from a real applied voucher
   let appliedVoucherLabel = "";
+  let appliedVoucher = null; // full voucher row once validated, so we can redeem it on submit
 
   function durationToMinutes(treatment) {
-    // Reads the real numeric field set in config.js / the admin console.
-    // Falls back to parsing the display string only for safety, in case
-    // older data without durationMinutes is still in localStorage somewhere.
     if (treatment && treatment.durationMinutes) return Number(treatment.durationMinutes);
     const match = String(treatment && treatment.duration).match(/(\d+)\s*min/);
     return match ? Number(match[1]) : 60;
   }
 
-  function populateTimeSlots() {
-    timeSelect.innerHTML = `<option value="" disabled selected>Choose a time</option>`;
-    const t = findTreatment(treatmentSelect.value);
-    if (!dateInput.value || !t) return;
+  async function populateTimeSlots() {
+    timeSelect.innerHTML = `<option value="" disabled selected>Loading times…</option>`;
+    const t = window.findTreatment(treatmentSelect.value);
+    if (!dateInput.value || !t) {
+      timeSelect.innerHTML = `<option value="" disabled selected>Choose a date first</option>`;
+      return;
+    }
 
     const duration = durationToMinutes(t);
-    const slots = ScheduleStore.getOpenSlots(dateInput.value, duration);
+    const slots = await ScheduleStore.getOpenSlots(dateInput.value, duration);
 
+    timeSelect.innerHTML = `<option value="" disabled selected>Choose a time</option>`;
     if (slots.length === 0) {
       const opt = document.createElement("option");
       opt.disabled = true;
@@ -102,7 +111,7 @@
   }
 
   treatmentSelect.addEventListener("change", () => {
-    const t = findTreatment(treatmentSelect.value);
+    const t = window.findTreatment(treatmentSelect.value);
     if (t) {
       treatmentHint.textContent = `${t.duration} · ${formatCurrency(t.price)} · ${t.desc}`;
     }
@@ -110,11 +119,10 @@
   });
 
   function getPriceBreakdown() {
-    const t = findTreatment(treatmentSelect.value);
+    const t = window.findTreatment(treatmentSelect.value);
     const base = t ? t.price : 0;
-    const discountAmount = Math.round((base * appliedDiscount) / 100);
-    const total = base - discountAmount;
-    return { base, discountAmount, total, treatment: t };
+    const total = Math.max(0, base - appliedDiscountAmount);
+    return { base, discountAmount: appliedDiscountAmount, total, treatment: t };
   }
 
   function renderSummary() {
@@ -136,29 +144,57 @@
     `;
   }
 
-  // ---- Voucher code (demo logic) ----
-  // Any code containing "GLOW" or "SCULPT" gives 10% off, for demo purposes.
-  applyVoucherBtn.addEventListener("click", () => {
+  // ---- Voucher code (real lookup against the vouchers table) ----
+  applyVoucherBtn.addEventListener("click", async () => {
     const code = voucherInput.value.trim().toUpperCase();
     if (!code) {
       voucherFeedback.textContent = "Enter a code first.";
       return;
     }
-    if (code.includes("GLOW") || code.includes("SCULPT")) {
-      appliedDiscount = 10;
-      appliedVoucherLabel = `Voucher (${code})`;
-      voucherFeedback.textContent = "Voucher applied — 10% off this booking.";
-      voucherFeedback.style.color = "var(--success)";
-    } else {
-      appliedDiscount = 0;
+
+    applyVoucherBtn.disabled = true;
+    voucherFeedback.textContent = "Checking code…";
+
+    const { data, error } = await sb.from("vouchers").select("*").eq("code", code).maybeSingle();
+    applyVoucherBtn.disabled = false;
+
+    if (error || !data) {
+      appliedDiscountAmount = 0;
+      appliedVoucher = null;
       voucherFeedback.textContent = "Code not recognised. Check with the salon on WhatsApp.";
       voucherFeedback.style.color = "#b3543f";
+      renderSummary();
+      return;
     }
+
+    if (data.is_redeemed) {
+      appliedDiscountAmount = 0;
+      appliedVoucher = null;
+      voucherFeedback.textContent = "This voucher has already been used.";
+      voucherFeedback.style.color = "#b3543f";
+      renderSummary();
+      return;
+    }
+
+    if (data.expires_at && new Date(data.expires_at) < new Date()) {
+      appliedDiscountAmount = 0;
+      appliedVoucher = null;
+      voucherFeedback.textContent = "This voucher has expired.";
+      voucherFeedback.style.color = "#b3543f";
+      renderSummary();
+      return;
+    }
+
+    appliedVoucher = data;
+    appliedDiscountAmount = Number(data.amount);
+    appliedVoucherLabel = `Voucher (${code})`;
+    voucherFeedback.textContent = `Voucher applied — ${formatCurrency(data.amount)} off this booking.`;
+    voucherFeedback.style.color = "var(--success)";
     renderSummary();
   });
 
   // ---- Submit ----
-  form.addEventListener("submit", (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!validateStep(3)) return;
 
@@ -167,23 +203,58 @@
       ? new Date(dateInput.value).toLocaleDateString("en-ZA", { day: "numeric", month: "long" })
       : "";
 
-    form.querySelector(".booking-steps").style.display = "none";
-    panels.forEach((p) => p.classList.remove("is-active"));
-    bookingSuccess.hidden = false;
+    confirmBookingBtn.disabled = true;
+    confirmBookingBtn.textContent = "Booking…";
 
-    // Persist the booking so this slot is no longer offered to other customers.
-    // (Swap target for Supabase + Google Calendar — see schedule-store.js header.)
-    ScheduleStore.saveBooking({
+    const paymentMethod = form.querySelector('input[name="payMethod"]:checked')?.value || "instore";
+
+    const saved = await ScheduleStore.saveBooking({
       date: dateInput.value,
       time: timeSelect.value,
-      durationMinutes: durationToMinutes(treatment),
       treatmentId: treatment.id,
       treatmentName: treatment.name,
       name: nameInput.value.trim(),
       phone: phoneInput.value.trim(),
       email: emailInput.value.trim(),
       total,
+      voucherId: appliedVoucher ? appliedVoucher.id : null,
+      paymentMethod,
+      whatsappOptIn: whatsappOptIn.checked,
     });
+
+    confirmBookingBtn.disabled = false;
+    confirmBookingBtn.textContent = "Confirm booking";
+
+    if (!saved) {
+      voucherFeedback.textContent = "Something went wrong saving your booking — please try again or contact the salon on WhatsApp.";
+      voucherFeedback.style.color = "#b3543f";
+      return;
+    }
+
+    // Mark the voucher redeemed now that it's tied to a real booking.
+    if (appliedVoucher) {
+      await sb
+        .from("vouchers")
+        .update({ is_redeemed: true, redeemed_booking_id: saved.id, redeemed_at: new Date().toISOString() })
+        .eq("id", appliedVoucher.id);
+    }
+
+    // Earn loyalty points for this spend, keyed by phone number.
+    if (window.SSculptLoyalty) {
+      await window.SSculptLoyalty.addSpend(phoneInput.value.trim(), nameInput.value.trim(), total, saved.id);
+    }
+
+    // Push to her real Google Calendar. Best-effort: if this fails (e.g.
+    // calendar not shared with the service account yet), the booking is
+    // still saved in Supabase — we don't block the customer's confirmation
+    // on a calendar sync issue she can fix later.
+    sb.functions.invoke("calendar-sync", { body: { booking_id: saved.id } }).catch((err) => {
+      console.error("Calendar sync failed (booking still saved):", err);
+    });
+
+    form.querySelector(".booking-steps").style.display = "none";
+    panels.forEach((p) => p.classList.remove("is-active"));
+    bookingSuccess.hidden = false;
 
     bookingSuccessDetail.textContent = `${treatment.name} on ${dateLabel} at ${timeSelect.value}, for ${formatCurrency(total)}. We'll confirm your slot shortly.`;
 
@@ -193,11 +264,6 @@
       successWhatsappBtn.hidden = false;
     } else {
       successWhatsappBtn.hidden = true;
-    }
-
-    // Feed the loyalty demo (purely client-side, see loyalty.js)
-    if (window.SSculptLoyalty) {
-      window.SSculptLoyalty.addSpend(total);
     }
   });
 
