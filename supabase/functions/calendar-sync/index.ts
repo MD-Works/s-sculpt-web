@@ -30,15 +30,32 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // (No external Google SDK needed — Deno's built-in crypto handles RS256.)
 async function getGoogleAccessToken() {
   const email = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_EMAIL");
-  const rawKey = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
+  let rawKey = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
   if (!email || !rawKey) throw new Error("Missing Google service account secrets");
 
+  // Handles the key arriving in any of these forms, since different paste/
+  // file-export paths produce different results:
+  //   - literal backslash-n sequences (\n as two characters)
+  //   - already-real newlines
+  //   - wrapped in an extra pair of quotes
+  rawKey = rawKey.trim();
+  if (rawKey.startsWith('"') && rawKey.endsWith('"')) {
+    rawKey = rawKey.slice(1, -1);
+  }
   const privateKeyPem = rawKey.replace(/\\n/g, "\n");
   const pemBody = privateKeyPem
-    .replace("-----BEGIN PRIVATE KEY-----", "")
-    .replace("-----END PRIVATE KEY-----", "")
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
     .replace(/\s/g, "");
-  const keyBytes = Uint8Array.from(atob(pemBody), (c) => c.charCodeAt(0));
+
+  console.log("Parsed PEM body length:", pemBody.length, "first 12 chars:", pemBody.slice(0, 12));
+
+  let keyBytes;
+  try {
+    keyBytes = Uint8Array.from(atob(pemBody), (c) => c.charCodeAt(0));
+  } catch (e) {
+    throw new Error(`Failed to base64-decode private key (length ${pemBody.length}): ${e.message}`);
+  }
 
   const cryptoKey = await crypto.subtle.importKey(
     "pkcs8",
