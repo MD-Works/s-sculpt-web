@@ -241,11 +241,12 @@
       <p class="loyalty-next" id="loyaltyNextDisplay"></p>
 
       <div class="loyalty-demo">
-        <p class="field-hint">Demo: simulate a visit to see how points grow.</p>
-        <div class="loyalty-demo-actions">
-          <button class="btn btn-ghost" id="addVisitBtn">+ Add a R450 visit</button>
-          <button class="btn btn-text" id="resetLoyaltyBtn">Reset</button>
+        <label class="field-label" for="loyaltyLookupInput">Check my points</label>
+        <div class="voucher-row">
+          <input type="tel" id="loyaltyLookupInput" class="field-input" placeholder="Phone number used at booking">
+          <button type="button" class="btn btn-ghost" id="loyaltyLookupBtn">Check</button>
         </div>
+        <p class="field-hint" id="loyaltyLookupFeedback"></p>
       </div>
     </div>
   </div>
@@ -287,7 +288,7 @@
         <textarea id="voucherMsgInput" class="field-input" rows="2" placeholder="Treat yourself, you deserve it."></textarea>
 
         <button type="button" class="btn btn-primary btn-lg" id="generateVoucherBtn">Generate voucher</button>
-        <p class="field-hint">Generates a shareable preview now. Real payment will issue an official voucher code once payments are connected.</p>
+        <p class="field-hint">This creates a real, usable voucher code. Online card payment isn't connected yet, so please arrange payment with the salon directly (cash, EFT or in person) before sharing the code.</p>
       </div>
     </div>
   </div>
@@ -319,10 +320,13 @@
   <p class="footer-fine">Bookings, payments and loyalty shown here are a working demo. Connect a payment provider and WhatsApp Business API to go live.</p>
 </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/supabase-client.js"></script>
 <script src="js/config.js"></script>
+<script src="js/treatment-store.js"></script>
+<script src="js/schedule-store.js"></script>
 <script src="js/services.js"></script>
 <script src="js/nav.js"></script>
-<script src="js/schedule-store.js"></script>
 <script src="js/booking.js"></script>
 <script src="js/loyalty.js"></script>
 <script src="js/vouchers.js"></script>

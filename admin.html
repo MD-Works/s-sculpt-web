@@ -20,13 +20,14 @@
   <div class="admin-login-card">
     <div class="admin-login-mark">SS</div>
     <h1>S Sculpt Admin</h1>
-    <p>Enter the passcode to manage treatments and specials.</p>
+    <p>Sign in with your admin account to manage treatments, specials and bookings.</p>
     <form id="loginForm">
-      <input class="field-input" type="password" id="passcodeInput" placeholder="Passcode" autocomplete="current-password" required>
+      <input class="field-input" type="email" id="emailInput" placeholder="Email" autocomplete="username" required>
+      <input class="field-input" type="password" id="passcodeInput" placeholder="Password" autocomplete="current-password" required>
       <p class="admin-login-error" id="loginError"></p>
-      <button type="submit" class="btn btn-primary">Enter</button>
+      <button type="submit" class="btn btn-primary">Sign in</button>
     </form>
-    <p class="admin-login-note">Temporary passcode lock only — not yet connected to real account login. Real admin sign-in arrives with Supabase Auth.</p>
+    <p class="admin-login-note">Real Supabase account login. If you don't have an account yet, create one from the Supabase Dashboard under Authentication &rarr; Users.</p>
   </div>
 </div>
 
@@ -34,7 +35,7 @@
 <div class="admin-shell" id="adminShell" style="display:none;">
 
   <aside class="admin-sidebar">
-    <div class="admin-brand">SS Admin <span class="admin-brand-tag">Demo data</span></div>
+    <div class="admin-brand">SS Admin <span class="admin-brand-tag">Live data</span></div>
 
     <a href="index.html" class="admin-view-site" target="_blank" rel="noopener">&larr; View live site</a>
 
@@ -44,7 +45,7 @@
       <button data-panel="specials"><span class="nav-icon">&#9670;</span><span class="nav-label">Specials</span></button>
       <button data-panel="hours"><span class="nav-icon">&#9670;</span><span class="nav-label">Hours</span></button>
       <button data-panel="bookings"><span class="nav-icon">&#9670;</span><span class="nav-label">Bookings</span></button>
-      <button data-panel="export"><span class="nav-icon">&#9670;</span><span class="nav-label">Export</span></button>
+      <button data-panel="database"><span class="nav-icon">&#9670;</span><span class="nav-label">Database</span></button>
     </nav>
 
     <div class="admin-sidebar-footer">
@@ -56,7 +57,7 @@
 
     <div class="admin-banner">
       <span>&#9888;</span>
-      <span><strong>Working from saved demo data</strong> — changes here save to this browser only, for now. Once Supabase is connected, edits will go live on the real site automatically.</span>
+      <span><strong>Connected to the real Supabase database</strong> — changes here go live on the public site immediately. Logged in as a real admin account, so saves should work normally. If a save fails, check the browser console — it usually means the row-level security policy needs a look.</span>
     </div>
 
     <!-- DASHBOARD -->
@@ -173,25 +174,26 @@
     </section>
 
 
-    <section class="admin-panel" data-panel="export">
+    <section class="admin-panel" data-panel="database">
       <div class="admin-topbar">
         <div>
-          <h2>Export</h2>
-          <p>Copy this and paste it over the <code>TREATMENTS</code> block in <code>js/config.js</code> to update the live site with your changes today.</p>
+          <h2>Database</h2>
+          <p>This console reads and writes directly to the live Supabase project. There's no export step anymore — edits here are the real data.</p>
         </div>
       </div>
 
       <div class="admin-card" style="margin-bottom: var(--space-2);">
         <div class="admin-card-body">
-          <p class="admin-card-name">Why export, for now</p>
-          <p class="admin-card-desc">The site doesn't read from this admin console yet — that happens once Supabase is connected. Until then, this export is how your changes reach the real site: copy it, paste it into config.js, and re-deploy.</p>
+          <p class="admin-card-name">Admin login is real now</p>
+          <p class="admin-card-desc">Signing in here uses a real Supabase account (Authentication &rarr; Users in the Supabase Dashboard), not a shared passcode. Row-level security only allows treatment, special, hours and booking-cancellation writes from a logged-in admin — everything else (customers booking, buying vouchers) works without login by design.</p>
         </div>
       </div>
 
-      <pre class="admin-export-box" id="exportBox"></pre>
-      <div class="admin-add-row">
-        <button class="btn btn-primary" id="copyExportBtn">Copy to clipboard</button>
-        <button class="btn btn-ghost" id="resetDataBtn">Reset all data to defaults</button>
+      <div class="admin-card">
+        <div class="admin-card-body">
+          <p class="admin-card-name">Public booking &amp; voucher flow</p>
+          <p class="admin-card-desc">Customers booking or buying a voucher on the public site don't need to log in — those writes are allowed by specific, narrow database rules (e.g. anyone can create a booking, but only an unredeemed voucher can be marked redeemed). Admin edits to treatments, specials and hours are the ones that need real login.</p>
+        </div>
       </div>
     </section>
 
@@ -200,7 +202,10 @@
 
 <div class="admin-toast" id="adminToast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/supabase-client.js"></script>
 <script src="js/config.js"></script>
+<script src="js/treatment-store.js"></script>
 <script src="js/admin-store.js"></script>
 <script src="js/schedule-store.js"></script>
 <script src="js/admin.js"></script>
