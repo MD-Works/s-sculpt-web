@@ -24,6 +24,9 @@ function normalizeTreatmentRow(row) {
     desc: row.description || "",
     active: row.is_active,
     sortOrder: row.sort_order,
+    // null = no override (follow the global payment setting),
+    // true = always allow instore for this treatment, false = never.
+    allowInstore: row.allow_instore === undefined ? null : row.allow_instore,
   };
 }
 
@@ -71,6 +74,7 @@ const TreatmentStore = {
       duration_minutes: durationMinutes,
       sessions_count: sessionsCount,
       description: treatment.desc || "",
+      allow_instore: treatment.allowInstore === undefined ? null : treatment.allowInstore,
     };
 
     if (treatment.id) {

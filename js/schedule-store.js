@@ -83,6 +83,47 @@ const ScheduleStore = {
     if (error) handleSbError(error, null);
   },
 
+  // ---------- Payment settings ----------
+  // instoreEnabled: master switch for "pay in salon" across the whole site.
+  // minAmountForInstore: null = no cap, otherwise instore only offered
+  // below this amount (subject to each treatment's own override — see
+  // treatment-store.js's allow_instore field and booking.js's combining logic).
+  async getPaymentSettings() {
+    const { data, error } = await sb
+      .from("salon_settings")
+      .select("instore_payment_enabled, min_amount_for_instore")
+      .eq("id", true)
+      .maybeSingle();
+    if (error || !data) return handleSbError(error, { instoreEnabled: true, minAmountForInstore: null });
+    return {
+      instoreEnabled: data.instore_payment_enabled,
+      minAmountForInstore: data.min_amount_for_instore === null ? null : Number(data.min_amount_for_instore),
+    };
+  },
+
+  async setPaymentSettings({ instoreEnabled, minAmountForInstore }) {
+    const row = {};
+    if (instoreEnabled !== undefined) row.instore_payment_enabled = !!instoreEnabled;
+    if (minAmountForInstore !== undefined) row.min_amount_for_instore = minAmountForInstore === null || minAmountForInstore === "" ? null : Number(minAmountForInstore);
+    const { error } = await sb.from("salon_settings").update(row).eq("id", true);
+    if (error) handleSbError(error, null);
+  },
+
+  // Combines the global instore switch + global minimum + a treatment's
+  // own override into a single yes/no. Rules, in priority order:
+  //   1. Global instore switch off              -> never allowed
+  //   2. Treatment's allow_instore === false     -> never allowed
+  //   3. Treatment's allow_instore === true       -> always allowed
+  //   4. Otherwise, fall back to the global minimum: allowed only if
+  //      amount is below min_amount_for_instore (or no minimum is set)
+  isInstoreAllowed(paymentSettings, treatment, amount) {
+    if (!paymentSettings.instoreEnabled) return false;
+    if (treatment && treatment.allowInstore === false) return false;
+    if (treatment && treatment.allowInstore === true) return true;
+    if (paymentSettings.minAmountForInstore === null || paymentSettings.minAmountForInstore === undefined) return true;
+    return Number(amount) < Number(paymentSettings.minAmountForInstore);
+  },
+
   // ---------- Blocked dates ----------
   async getBlockedDates() {
     const { data, error } = await sb.from("blocked_dates").select("blocked_date").order("blocked_date", { ascending: true });
