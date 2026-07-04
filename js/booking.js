@@ -26,9 +26,23 @@
   const bookingSuccess = document.getElementById("bookingSuccess");
   const bookingSuccessDetail = document.getElementById("bookingSuccessDetail");
   const successWhatsappBtn = document.getElementById("successWhatsappBtn");
+  const newBookingBtn = document.getElementById("newBookingBtn");
   const confirmBookingBtn = document.getElementById("confirmBookingBtn");
   const payOptionsContainer = document.getElementById("payOptionsContainer");
   const payOptionsHint = document.getElementById("payOptionsHint");
+
+  function resetBookingForm() {
+    bookingSuccess.hidden = true;
+    form.querySelector(".booking-steps").style.display = "";
+    form.reset();
+    appliedVoucher = null;
+    if (voucherFeedback) voucherFeedback.textContent = "";
+    // Clear the ?payment=success params so a page refresh doesn't re-trigger the PayFast return handler
+    window.history.replaceState({}, "", window.location.pathname);
+    goToStep(1);
+  }
+
+  newBookingBtn.addEventListener("click", resetBookingForm);
 
   let cachedPaymentSettings = null;
 
@@ -339,6 +353,9 @@
       console.error("Calendar sync failed (booking still saved):", err);
     });
 
+    // Clear the URL params immediately so a page refresh doesn't re-show this screen
+    window.history.replaceState({}, "", window.location.pathname);
+
     form.querySelector(".booking-steps").style.display = "none";
     panels.forEach((p) => p.classList.remove("is-active"));
     bookingSuccess.hidden = false;
@@ -371,6 +388,9 @@
       .select("*, treatments(name)")
       .eq("id", bookingId)
       .maybeSingle();
+
+    // Clear the URL params immediately so a page refresh doesn't re-show this screen
+    window.history.replaceState({}, "", window.location.pathname);
 
     form.querySelector(".booking-steps").style.display = "none";
     panels.forEach((p) => p.classList.remove("is-active"));
