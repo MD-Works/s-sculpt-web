@@ -162,8 +162,8 @@ const ScheduleStore = {
     const { data, error } = await sb
       .from("bookings")
       .select("*, treatments(name)")
-      .order("booking_date", { ascending: true })
-      .order("booking_time", { ascending: true });
+      .order("booking_date", { ascending: false })
+      .order("booking_time", { ascending: false });
     if (error) return handleSbError(error, []);
     return data.map((row) => ({
       ...normalizeBookingRow(row),

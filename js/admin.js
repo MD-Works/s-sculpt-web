@@ -41,7 +41,8 @@ function showLogin() {
 async function showShell() {
   document.getElementById("loginScreen").style.display = "none";
   document.getElementById("adminShell").style.display = "grid";
-  await Promise.all([renderTreatments("sculpt"), renderSpecials(), renderHours(), renderBlockedDates(), renderBookings()]);
+  await Promise.all([renderTreatments("sculpt"), renderSpecials(), renderHours(), renderBlockedDates(), renderBookings(), renderVouchers()]);
+  initVoucherAdmin();
   await renderStats();
 }
 
@@ -354,16 +355,22 @@ async function renderBookings() {
     return;
   }
 
-  bookings.forEach((b) => {
+  function buildCard(b) {
     const dateLabel = new Date(b.date + "T00:00:00").toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
     const isCancelled = b.status === "cancelled";
+    const isPaid = b.payment_status === "paid";
     const card = document.createElement("div");
     card.className = `admin-card${isCancelled ? " is-inactive" : ""}`;
+    let pills = "";
+    if (isCancelled) {
+      pills = '<span class="admin-pill">Cancelled</span>';
+    } else {
+      pills = '<span class="admin-pill is-on">Confirmed</span>';
+      if (isPaid) pills += ' <span class="admin-pill is-on" style="background:var(--clr-accent-2,#2d7a4f);margin-left:4px">Paid</span>';
+    }
     card.innerHTML = `
       <div class="admin-card-body">
-        <p class="admin-card-name">${escapeHtml(b.treatmentName || "Treatment")}${
-          isCancelled ? '<span class="admin-pill">Cancelled</span>' : '<span class="admin-pill is-on">Confirmed</span>'
-        }</p>
+        <p class="admin-card-name">${escapeHtml(b.treatmentName || "Treatment")}${pills}</p>
         <p class="admin-card-meta">${dateLabel}<span class="sep">&middot;</span>${b.time}<span class="sep">&middot;</span>R${Number(b.total || 0).toLocaleString("en-ZA")}</p>
         <p class="admin-card-desc">${escapeHtml(b.name || "")} &middot; ${escapeHtml(b.phone || "")}</p>
       </div>
@@ -371,7 +378,189 @@ async function renderBookings() {
         ${!isCancelled ? `<button class="btn btn-ghost btn-sm" data-action="cancel-booking" data-id="${b.id}">Cancel</button>` : ""}
       </div>
     `;
-    list.appendChild(card);
+    return card;
+  }
+
+  const active = bookings.filter((b) => b.status !== "cancelled");
+  const cancelled = bookings.filter((b) => b.status === "cancelled");
+
+  // Active bookings (most recent first — sorted by the query already)
+  if (active.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "admin-empty";
+    empty.textContent = "No upcoming bookings.";
+    list.appendChild(empty);
+  } else {
+    active.forEach((b) => list.appendChild(buildCard(b)));
+  }
+
+  // Cancelled bookings — collapsible section, collapsed by default
+  if (cancelled.length > 0) {
+    const section = document.createElement("div");
+    section.style.marginTop = "1.5rem";
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "btn btn-ghost btn-sm";
+    toggle.style.cssText = "width:100%;text-align:left;color:var(--clr-text-muted,#888);font-size:0.85rem;padding:0.5rem 0;border-top:1px solid var(--clr-border,#e5d9c8)";
+    toggle.textContent = `▶  ${cancelled.length} cancelled booking${cancelled.length === 1 ? "" : "s"} — click to show`;
+
+    const inner = document.createElement("div");
+    inner.hidden = true;
+    cancelled.forEach((b) => inner.appendChild(buildCard(b)));
+
+    toggle.addEventListener("click", () => {
+      inner.hidden = !inner.hidden;
+      toggle.textContent = inner.hidden
+        ? `▶  ${cancelled.length} cancelled booking${cancelled.length === 1 ? "" : "s"} — click to show`
+        : `▼  ${cancelled.length} cancelled booking${cancelled.length === 1 ? "" : "s"} — click to hide`;
+    });
+
+    section.appendChild(toggle);
+    section.appendChild(inner);
+    list.appendChild(section);
+  }
+}
+
+
+async function renderVouchers() {
+  const list = document.getElementById("voucherAdminList");
+  if (!list) return;
+  list.innerHTML = `<div class="admin-empty">Loading…</div>`;
+
+  const { data, error } = await sb
+    .from("vouchers")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) {
+    list.innerHTML = `<div class="admin-empty">Could not load vouchers.</div>`;
+    return;
+  }
+  if (data.length === 0) {
+    list.innerHTML = `<div class="admin-empty">No vouchers yet. Generate one above after receiving payment.</div>`;
+    return;
+  }
+
+  const active = data.filter((v) => !v.is_redeemed);
+  const redeemed = data.filter((v) => v.is_redeemed);
+
+  list.innerHTML = "";
+
+  function buildVoucherCard(v) {
+    const card = document.createElement("div");
+    card.className = `admin-card${v.is_redeemed ? " is-inactive" : ""}`;
+    const created = new Date(v.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+    card.innerHTML = `
+      <div class="admin-card-body">
+        <p class="admin-card-name">
+          ${escapeHtml(v.code)}
+          ${v.is_redeemed
+            ? '<span class="admin-pill">Redeemed</span>'
+            : '<span class="admin-pill is-on">Active</span>'}
+        </p>
+        <p class="admin-card-meta">
+          R${Number(v.amount || 0).toLocaleString("en-ZA")}
+          ${v.recipient_name ? `<span class="sep">&middot;</span> For ${escapeHtml(v.recipient_name)}` : ""}
+          ${v.sender_name ? `<span class="sep">&middot;</span> From ${escapeHtml(v.sender_name)}` : ""}
+        </p>
+        <p class="admin-card-desc">Created ${created}</p>
+      </div>
+      <div class="admin-card-actions">
+        <button class="btn btn-ghost btn-sm" data-action="copy-voucher-code" data-code="${escapeHtml(v.code)}">Copy code</button>
+      </div>
+    `;
+    return card;
+  }
+
+  active.forEach((v) => list.appendChild(buildVoucherCard(v)));
+
+  if (redeemed.length > 0) {
+    const section = document.createElement("div");
+    section.style.marginTop = "1.5rem";
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "btn btn-ghost btn-sm";
+    toggle.style.cssText = "width:100%;text-align:left;color:var(--clr-text-muted,#888);font-size:0.85rem;padding:0.5rem 0;border-top:1px solid var(--clr-border,#e5d9c8)";
+    toggle.textContent = `▶  ${redeemed.length} redeemed voucher${redeemed.length === 1 ? "" : "s"} — click to show`;
+    const inner = document.createElement("div");
+    inner.hidden = true;
+    redeemed.forEach((v) => inner.appendChild(buildVoucherCard(v)));
+    toggle.addEventListener("click", () => {
+      inner.hidden = !inner.hidden;
+      toggle.textContent = inner.hidden
+        ? `▶  ${redeemed.length} redeemed voucher${redeemed.length === 1 ? "" : "s"} — click to show`
+        : `▼  ${redeemed.length} redeemed voucher${redeemed.length === 1 ? "" : "s"} — click to hide`;
+    });
+    section.appendChild(toggle);
+    section.appendChild(inner);
+    list.appendChild(section);
+  }
+}
+
+function generateVoucherCode() {
+  const words = ["GLOW","SILK","ROSE","SCULPT","GOLD","BLOOM","LIFT","LUXE","SOFT","SHINE"];
+  const w1 = words[Math.floor(Math.random() * words.length)];
+  const w2 = words[Math.floor(Math.random() * words.length)];
+  const num = String(Math.floor(Math.random() * 900) + 100);
+  return `SCULPT-${w1}-${w2}-${num}`;
+}
+
+async function initVoucherAdmin() {
+  const generateBtn = document.getElementById("vAdminGenerateBtn");
+  const feedback = document.getElementById("vAdminFeedback");
+  if (!generateBtn) return;
+
+  generateBtn.addEventListener("click", async () => {
+    const amount = Number(document.getElementById("vAdminAmount").value);
+    const to = document.getElementById("vAdminTo").value.trim();
+    const from = document.getElementById("vAdminFrom").value.trim();
+    const msg = document.getElementById("vAdminMsg").value.trim();
+
+    if (!amount || amount < 50) {
+      feedback.style.color = "#b3543f";
+      feedback.textContent = "Please enter a valid amount (minimum R50).";
+      return;
+    }
+    if (!to) {
+      feedback.style.color = "#b3543f";
+      feedback.textContent = "Please enter the recipient\'s name.";
+      return;
+    }
+
+    generateBtn.disabled = true;
+    generateBtn.textContent = "Generating…";
+    feedback.textContent = "";
+
+    const code = generateVoucherCode();
+    const { error } = await sb.from("vouchers").insert({
+      code,
+      amount,
+      recipient_name: to,
+      sender_name: from || null,
+      message: msg || null,
+      is_redeemed: false,
+    });
+
+    generateBtn.disabled = false;
+    generateBtn.textContent = "Generate voucher code";
+
+    if (error) {
+      feedback.style.color = "#b3543f";
+      feedback.textContent = "Something went wrong — please try again.";
+      return;
+    }
+
+    feedback.style.color = "var(--clr-accent)";
+    feedback.textContent = `✓ Voucher created: ${code}  —  copy this code and share it with ${to}.`;
+
+    // Clear the form
+    document.getElementById("vAdminAmount").value = "";
+    document.getElementById("vAdminTo").value = "";
+    document.getElementById("vAdminFrom").value = "";
+    document.getElementById("vAdminMsg").value = "";
+
+    await renderVouchers();
   });
 }
 
@@ -527,6 +716,9 @@ document.addEventListener("DOMContentLoaded", async () => {
           await renderSpecials();
           toast("Special deleted.");
         }
+        break;
+      case "copy-voucher-code":
+        navigator.clipboard.writeText(e.target.dataset.code || "").then(() => toast("Code copied!")).catch(() => toast("Copy failed — select the code manually."));
         break;
       case "toggle-special":
         await DataStore.toggleSpecialActive(id);
