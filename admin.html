@@ -45,6 +45,7 @@
       <button data-panel="specials"><span class="nav-icon">&#9670;</span><span class="nav-label">Specials</span></button>
       <button data-panel="hours"><span class="nav-icon">&#9670;</span><span class="nav-label">Hours</span></button>
       <button data-panel="bookings"><span class="nav-icon">&#9670;</span><span class="nav-label">Bookings</span></button>
+      <button data-panel="vouchers"><span class="nav-icon">&#9670;</span><span class="nav-label">Vouchers</span></button>
       <button data-panel="database"><span class="nav-icon">&#9670;</span><span class="nav-label">Database</span></button>
     </nav>
 
@@ -175,6 +176,48 @@
       <div class="admin-list" id="bookingList"></div>
     </section>
 
+
+    <!-- VOUCHERS -->
+    <section class="admin-panel" data-panel="vouchers">
+      <div class="admin-topbar">
+        <div>
+          <h2>Gift Vouchers</h2>
+          <p>Generate a voucher code after receiving payment from the customer (cash, EFT or card machine). The code is then ready to share with the recipient.</p>
+        </div>
+      </div>
+
+      <div class="admin-card" style="margin-bottom:1.5rem">
+        <div class="admin-card-body" style="width:100%">
+          <p class="admin-card-name" style="margin-bottom:1rem">Generate new voucher</p>
+
+          <div style="display:grid;gap:0.75rem;max-width:420px">
+            <div>
+              <label class="field-label" for="vAdminAmount">Amount (R)</label>
+              <input type="number" id="vAdminAmount" class="field-input" placeholder="e.g. 500" min="50" step="50" style="width:100%">
+            </div>
+            <div>
+              <label class="field-label" for="vAdminTo">Recipient name</label>
+              <input type="text" id="vAdminTo" class="field-input" placeholder="e.g. Mom" style="width:100%">
+            </div>
+            <div>
+              <label class="field-label" for="vAdminFrom">From</label>
+              <input type="text" id="vAdminFrom" class="field-input" placeholder="Your name" style="width:100%">
+            </div>
+            <div>
+              <label class="field-label" for="vAdminMsg">Message (optional)</label>
+              <textarea id="vAdminMsg" class="field-input" rows="2" placeholder="Treat yourself, you deserve it." style="width:100%"></textarea>
+            </div>
+            <div>
+              <button type="button" class="btn btn-primary" id="vAdminGenerateBtn">Generate voucher code</button>
+            </div>
+            <p id="vAdminFeedback" style="font-size:0.9rem;color:var(--clr-accent)"></p>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="margin-bottom:0.75rem;font-size:1rem">Existing vouchers</h3>
+      <div class="admin-list" id="voucherAdminList"></div>
+    </section>
 
     <section class="admin-panel" data-panel="database">
       <div class="admin-topbar">
