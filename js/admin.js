@@ -368,11 +368,16 @@ async function renderBookings() {
       pills = '<span class="admin-pill is-on">Confirmed</span>';
       if (isPaid) pills += ' <span class="admin-pill is-on" style="background:var(--clr-accent-2,#2d7a4f);margin-left:4px">Paid</span>';
     }
+    // Check if booking used a voucher (b.voucherId comes from normalizeBookingRow)
+    const voucherLine = b.voucherId
+      ? `<p class="admin-card-desc" style="color:var(--clr-accent)">&#127873; Voucher used${b.voucherDiscount ? ` · R${Number(b.voucherDiscount).toLocaleString("en-ZA")} off` : ""}</p>`
+      : "";
     card.innerHTML = `
       <div class="admin-card-body">
         <p class="admin-card-name">${escapeHtml(b.treatmentName || "Treatment")}${pills}</p>
         <p class="admin-card-meta">${dateLabel}<span class="sep">&middot;</span>${b.time}<span class="sep">&middot;</span>R${Number(b.total || 0).toLocaleString("en-ZA")}</p>
         <p class="admin-card-desc">${escapeHtml(b.name || "")} &middot; ${escapeHtml(b.phone || "")}</p>
+        ${voucherLine}
       </div>
       <div class="admin-card-actions">
         ${!isCancelled ? `<button class="btn btn-ghost btn-sm" data-action="cancel-booking" data-id="${b.id}">Cancel</button>` : ""}
@@ -460,14 +465,21 @@ async function renderVouchers() {
             : '<span class="admin-pill is-on">Active</span>'}
         </p>
         <p class="admin-card-meta">
-          R${Number(v.amount || 0).toLocaleString("en-ZA")}
+          ${(v.balance_remaining !== null && v.balance_remaining !== undefined && !v.is_redeemed)
+            ? `R${Number(v.balance_remaining).toLocaleString("en-ZA")} remaining of R${Number(v.amount).toLocaleString("en-ZA")}`
+            : `R${Number(v.amount).toLocaleString("en-ZA")}`
+          }
           ${v.recipient_name ? `<span class="sep">&middot;</span> For ${escapeHtml(v.recipient_name)}` : ""}
           ${v.sender_name ? `<span class="sep">&middot;</span> From ${escapeHtml(v.sender_name)}` : ""}
         </p>
-        <p class="admin-card-desc">Created ${created}</p>
+        <p class="admin-card-desc">Created ${created}${v.amount_used ? ` &middot; R${Number(v.amount_used).toLocaleString("en-ZA")} last used` : ""}</p>
       </div>
       <div class="admin-card-actions">
-        <button class="btn btn-ghost btn-sm" data-action="copy-voucher-code" data-code="${escapeHtml(v.code)}">Copy code</button>
+        <button class="btn btn-ghost btn-sm" data-action="copy-voucher-code"
+          data-code="${escapeHtml(v.code)}"
+          data-amount="${v.amount || 0}"
+          data-recipient="${escapeHtml(v.recipient_name || '')}"
+          data-sender="${escapeHtml(v.sender_name || '')}">Share / copy</button>
       </div>
     `;
     return card;
@@ -496,6 +508,239 @@ async function renderVouchers() {
     section.appendChild(inner);
     list.appendChild(section);
   }
+}
+
+
+// ---- Voucher image generator ----
+function generateVoucherImage({ code, amount, recipientName, senderName, message }) {
+  const W = 900, H = 500;
+  const canvas = document.getElementById("voucherCanvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+
+  const BROWN     = "#3D2B1F";
+  const GOLD      = "#C9A24B";
+  const GOLD_LIGHT = "#E8C97A";
+  const CREAM     = "#FAF6F0";
+  const MID       = "#7A5C3E";
+
+  // Background
+  ctx.fillStyle = BROWN;
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle diagonal texture lines
+  ctx.save();
+  ctx.globalAlpha = 0.04;
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 1;
+  for (let i = -H; i < W + H; i += 28) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i + H, H);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Gold border frame
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(22, 22, W - 44, H - 44);
+
+  // Inner hairline
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 0.8;
+  ctx.globalAlpha = 0.45;
+  ctx.strokeRect(30, 30, W - 60, H - 60);
+  ctx.globalAlpha = 1;
+
+  // Gold accent bar — left side
+  const grd = ctx.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0, GOLD_LIGHT);
+  grd.addColorStop(0.5, GOLD);
+  grd.addColorStop(1, "#8B6820");
+  ctx.fillStyle = grd;
+  ctx.fillRect(22, 22, 6, H - 44);
+
+  // Brand name — top left
+  ctx.fillStyle = GOLD;
+  ctx.font = "600 22px 'Fraunces', Georgia, serif";
+  ctx.letterSpacing = "0.08em";
+  ctx.fillText("S SCULPT", 54, 72);
+  ctx.letterSpacing = "0em";
+
+  // Eyebrow label — top right
+  ctx.fillStyle = MID;
+  ctx.font = "500 13px 'Space Mono', monospace";
+  ctx.textAlign = "right";
+  ctx.fillText("GIFT VOUCHER", W - 50, 72);
+  ctx.textAlign = "left";
+
+  // Divider line
+  ctx.strokeStyle = GOLD;
+  ctx.globalAlpha = 0.25;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(54, 88);
+  ctx.lineTo(W - 50, 88);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // To: label
+  ctx.fillStyle = MID;
+  ctx.font = "500 13px 'Space Mono', monospace";
+  ctx.fillText("FOR", 54, 128);
+
+  // Recipient name
+  const recipientDisplay = recipientName || "You";
+  ctx.fillStyle = CREAM;
+  ctx.font = "600 52px 'Fraunces', Georgia, serif";
+  // Scale down if long
+  let fontSize = 52;
+  while (ctx.measureText(recipientDisplay).width > 480 && fontSize > 28) {
+    fontSize -= 2;
+    ctx.font = `600 ${fontSize}px 'Fraunces', Georgia, serif`;
+  }
+  ctx.fillText(recipientDisplay, 54, 186);
+
+  // Optional message
+  if (message) {
+    ctx.fillStyle = "#C9BBA8";
+    ctx.font = "italic 17px 'Fraunces', Georgia, serif";
+    // Wrap message at ~54 chars
+    const words = message.split(" ");
+    let line = "", lines = [], maxW = 480;
+    for (const word of words) {
+      const test = line ? line + " " + word : word;
+      if (ctx.measureText(test).width > maxW && line) {
+        lines.push(line);
+        line = word;
+        if (lines.length >= 2) break;
+      } else {
+        line = test;
+      }
+    }
+    lines.push(line);
+    lines.slice(0, 2).forEach((l, i) => ctx.fillText(l + (i === 1 && lines.length > 2 ? "…" : ""), 54, 228 + i * 26));
+  }
+
+  // Amount — large, right aligned
+  ctx.textAlign = "right";
+  ctx.font = "600 82px 'Fraunces', Georgia, serif";
+  ctx.fillStyle = GOLD_LIGHT;
+  ctx.fillText(`R${Number(amount).toLocaleString("en-ZA")}`, W - 50, 200);
+  ctx.textAlign = "left";
+
+  // Horizontal divider
+  ctx.strokeStyle = GOLD;
+  ctx.globalAlpha = 0.2;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(54, H - 148);
+  ctx.lineTo(W - 50, H - 148);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // Code label
+  ctx.fillStyle = MID;
+  ctx.font = "500 11px 'Space Mono', monospace";
+  ctx.letterSpacing = "0.12em";
+  ctx.fillText("VOUCHER CODE", 54, H - 116);
+  ctx.letterSpacing = "0em";
+
+  // Code value — monospaced, gold pill background
+  const codeFontSize = 22;
+  ctx.font = `700 ${codeFontSize}px 'Space Mono', monospace`;
+  const codeW = ctx.measureText(code).width;
+  const pillPad = 18, pillH = 40, pillY = H - 104;
+  // Pill background
+  ctx.fillStyle = "rgba(201,162,75,0.13)";
+  roundRect(ctx, 50, pillY, codeW + pillPad * 2, pillH, 6);
+  ctx.fill();
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.4;
+  roundRect(ctx, 50, pillY, codeW + pillPad * 2, pillH, 6);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = GOLD_LIGHT;
+  ctx.fillText(code, 50 + pillPad, pillY + 27);
+
+  // From / footer
+  const fromText = senderName ? `With love from ${senderName}  ·  ssculpt71@gmail.com` : "ssculpt71@gmail.com  ·  067 898 9347";
+  ctx.fillStyle = MID;
+  ctx.font = "13px 'Space Mono', monospace";
+  ctx.textAlign = "right";
+  ctx.fillText(fromText, W - 50, H - 42);
+  ctx.textAlign = "left";
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function openVoucherModal(voucherData) {
+  const modal = document.getElementById("voucherImageModal");
+  modal.style.display = "flex";
+
+  // Load Google Fonts into the document if not already present
+  if (!document.getElementById("gf-voucher")) {
+    const link = document.createElement("link");
+    link.id = "gf-voucher";
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,400&family=Space+Mono:wght@400;700&display=swap";
+    document.head.appendChild(link);
+  }
+
+  // Short delay to let fonts load before drawing
+  setTimeout(() => generateVoucherImage(voucherData), 400);
+
+  document.getElementById("voucherModalClose").onclick = () => {
+    modal.style.display = "none";
+  };
+  modal.onclick = (e) => {
+    if (e.target === modal) modal.style.display = "none";
+  };
+
+  document.getElementById("voucherDownloadBtn").onclick = () => {
+    const canvas = document.getElementById("voucherCanvas");
+    const a = document.createElement("a");
+    a.download = `SSculpt-Voucher-${voucherData.code}.png`;
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+  };
+
+  document.getElementById("voucherShareBtn").onclick = async () => {
+    const canvas = document.getElementById("voucherCanvas");
+    canvas.toBlob(async (blob) => {
+      const file = new File([blob], `SSculpt-Voucher-${voucherData.code}.png`, { type: "image/png" });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: "S Sculpt Gift Voucher",
+            text: `Your S Sculpt gift voucher code: ${voucherData.code}`,
+            files: [file],
+          });
+        } catch (e) {
+          if (e.name !== "AbortError") alert("Sharing failed — please use the Download button and attach the image manually.");
+        }
+      } else {
+        // Fallback: open WhatsApp with the code in the text
+        const msg = encodeURIComponent(`Hi! Here is your S Sculpt gift voucher 🎁\n\nCode: ${voucherData.code}\nValue: R${voucherData.amount}\n\nUse this code when booking at s-sculpt-web.pages.dev`);
+        window.open(`https://wa.me/?text=${msg}`, "_blank");
+      }
+    }, "image/png");
+  };
 }
 
 function generateVoucherCode() {
@@ -552,7 +797,16 @@ async function initVoucherAdmin() {
     }
 
     feedback.style.color = "var(--clr-accent)";
-    feedback.textContent = `✓ Voucher created: ${code}  —  copy this code and share it with ${to}.`;
+    feedback.textContent = `✓ Voucher created: ${code}`;
+
+    // Open the image modal for sharing
+    openVoucherModal({
+      code,
+      amount,
+      recipientName: to,
+      senderName: from || null,
+      message: msg || null,
+    });
 
     // Clear the form
     document.getElementById("vAdminAmount").value = "";
@@ -719,6 +973,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         break;
       case "copy-voucher-code":
         navigator.clipboard.writeText(e.target.dataset.code || "").then(() => toast("Code copied!")).catch(() => toast("Copy failed — select the code manually."));
+        // Also open the image modal so she can share it visually
+        openVoucherModal({
+          code: e.target.dataset.code,
+          amount: e.target.dataset.amount || "",
+          recipientName: e.target.dataset.recipient || "",
+          senderName: e.target.dataset.sender || null,
+          message: null,
+        });
         break;
       case "toggle-special":
         await DataStore.toggleSpecialActive(id);

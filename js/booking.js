@@ -240,10 +240,21 @@
     }
 
     appliedVoucher = data;
-    appliedDiscountAmount = Number(data.amount);
+    // Use remaining balance if partially used, otherwise full amount
+    const available = (data.balance_remaining !== null && data.balance_remaining !== undefined)
+      ? Number(data.balance_remaining)
+      : Number(data.amount);
+    data._available = available;
+    appliedDiscountAmount = available;
     appliedVoucherLabel = `Voucher (${code})`;
-    voucherFeedback.textContent = `Voucher applied — ${formatCurrency(data.amount)} off this booking.`;
+    // Show available balance (full amount, or remaining balance if partially used)
+    const available = (data.balance_remaining !== null && data.balance_remaining !== undefined)
+      ? Number(data.balance_remaining)
+      : Number(data.amount);
+    voucherFeedback.textContent = `Voucher applied — ${formatCurrency(available)} available on this voucher.`;
     voucherFeedback.style.color = "var(--success)";
+    // Store the available amount on the voucher object for use at checkout
+    data._available = available;
     renderSummary();
   });
 
@@ -273,6 +284,7 @@
       email: emailInput.value.trim(),
       total,
       voucherId: appliedVoucher ? appliedVoucher.id : null,
+      voucherDiscount: appliedVoucher ? appliedDiscountAmount : null,
       paymentMethod,
       whatsappOptIn: whatsappOptIn.checked,
     });
@@ -285,12 +297,25 @@
       return;
     }
 
-    // Mark the voucher redeemed now that it's tied to a real booking,
-    // regardless of payment path (the voucher itself was already "paid for").
+    // Redeem the voucher — handle partial redemptions (e.g. R500 voucher on a R450 treatment).
+    // If the voucher covers more than the booking total, leave the remainder usable.
     if (appliedVoucher) {
+      const voucherAvailable = (appliedVoucher._available !== undefined)
+        ? appliedVoucher._available
+        : Number(appliedVoucher.amount);
+      const amountUsed = Math.min(voucherAvailable, total);
+      const balanceAfter = Math.max(0, voucherAvailable - amountUsed);
+      const fullyUsed = balanceAfter <= 0;
+
       await sb
         .from("vouchers")
-        .update({ is_redeemed: true, redeemed_booking_id: saved.id, redeemed_at: new Date().toISOString() })
+        .update({
+          is_redeemed: fullyUsed,
+          redeemed_booking_id: saved.id,
+          redeemed_at: new Date().toISOString(),
+          amount_used: amountUsed,
+          balance_remaining: fullyUsed ? 0 : balanceAfter,
+        })
         .eq("id", appliedVoucher.id);
     }
 

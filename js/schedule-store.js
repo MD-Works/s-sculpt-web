@@ -43,6 +43,7 @@ function normalizeBookingRow(row) {
     voucherId: row.voucher_id,
     paymentMethod: row.payment_method,
     paymentStatus: row.payment_status,
+    voucherDiscount: row.voucher_discount ? Number(row.voucher_discount) : 0,
   };
 }
 
@@ -182,6 +183,7 @@ const ScheduleStore = {
       status: "confirmed",
       price_charged: booking.total,
       voucher_id: booking.voucherId || null,
+      voucher_discount: booking.voucherDiscount || null,
       payment_method: booking.paymentMethod || null,
       whatsapp_opt_in: booking.whatsappOptIn !== false,
     };
