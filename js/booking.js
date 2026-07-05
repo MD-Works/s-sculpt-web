@@ -281,7 +281,7 @@
       email: emailInput.value.trim(),
       total,
       voucherId: appliedVoucher ? appliedVoucher.id : null,
-      voucherDiscount: appliedVoucher ? appliedDiscountAmount : null,
+      voucherDiscount: appliedVoucher ? getPriceBreakdown().discountAmount : null,
       paymentMethod,
       whatsappOptIn: whatsappOptIn.checked,
     });
@@ -294,13 +294,15 @@
       return;
     }
 
-    // Redeem the voucher — handle partial redemptions (e.g. R500 voucher on a R450 treatment).
-    // If the voucher covers more than the booking total, leave the remainder usable.
+    // Redeem the voucher — handle partial redemptions (e.g. R600 voucher on a R450 treatment).
+    // IMPORTANT: use discountAmount (what was deducted from the price) not total (what
+    // the customer actually pays — which could be R0, breaking the calculation entirely).
     if (appliedVoucher) {
+      const { discountAmount } = getPriceBreakdown();
       const voucherAvailable = (appliedVoucher._available !== undefined)
         ? appliedVoucher._available
         : Number(appliedVoucher.amount);
-      const amountUsed = Math.min(voucherAvailable, total);
+      const amountUsed = discountAmount; // already capped at treatment price in getPriceBreakdown
       const balanceAfter = Math.max(0, voucherAvailable - amountUsed);
       const fullyUsed = balanceAfter <= 0;
 

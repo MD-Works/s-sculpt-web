@@ -462,7 +462,9 @@ async function renderVouchers() {
           ${escapeHtml(v.code)}
           ${v.is_redeemed
             ? '<span class="admin-pill">Redeemed</span>'
-            : '<span class="admin-pill is-on">Active</span>'}
+            : (v.balance_remaining !== null && v.balance_remaining !== undefined && Number(v.balance_remaining) < Number(v.amount))
+              ? '<span class="admin-pill" style="background:#8B6000;color:#fff">Partial</span>'
+              : '<span class="admin-pill is-on">Active</span>'}
         </p>
         <p class="admin-card-meta">
           ${(v.balance_remaining !== null && v.balance_remaining !== undefined && !v.is_redeemed)
@@ -477,7 +479,7 @@ async function renderVouchers() {
       <div class="admin-card-actions">
         <button class="btn btn-ghost btn-sm" data-action="copy-voucher-code"
           data-code="${escapeHtml(v.code)}"
-          data-amount="${v.amount || 0}"
+          data-amount="${(v.balance_remaining !== null && v.balance_remaining !== undefined) ? v.balance_remaining : v.amount || 0}"
           data-recipient="${escapeHtml(v.recipient_name || '')}"
           data-sender="${escapeHtml(v.sender_name || '')}">Share / copy</button>
       </div>
@@ -693,21 +695,23 @@ function openVoucherModal(voucherData) {
   const modal = document.getElementById("voucherImageModal");
   modal.style.display = "flex";
 
-  // Load Google Fonts into the document if not already present
+  // Load Google Fonts and wait until they are actually ready before drawing
   if (!document.getElementById("gf-voucher")) {
     const link = document.createElement("link");
     link.id = "gf-voucher";
     link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,400&family=Space+Mono:wght@400;700&display=swap";
+    link.href = "https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;1,9..144,400&family=Space+Mono:wght@400;700&display=swap";
     document.head.appendChild(link);
   }
-
-  // Short delay to let fonts load before drawing
-  setTimeout(() => generateVoucherImage(voucherData), 400);
+  // document.fonts.ready resolves once all loaded fonts are available to canvas
+  document.fonts.ready.then(() => generateVoucherImage(voucherData));
 
   document.getElementById("voucherModalClose").onclick = () => {
     modal.style.display = "none";
   };
+
+  const redrawBtn = document.getElementById("voucherRedrawBtn");
+  if (redrawBtn) redrawBtn.onclick = () => document.fonts.ready.then(() => generateVoucherImage(voucherData));
   modal.onclick = (e) => {
     if (e.target === modal) modal.style.display = "none";
   };
@@ -978,7 +982,8 @@ document.addEventListener("DOMContentLoaded", async () => {
           code: e.target.dataset.code,
           amount: e.target.dataset.amount || "",
           recipientName: e.target.dataset.recipient || "",
-          senderName: e.target.dataset.sender || null,
+          senderName: e.target.dataset.sender && e.target.dataset.sender !== e.target.dataset.recipient
+            ? e.target.dataset.sender : null,
           message: null,
         });
         break;
