@@ -254,5 +254,22 @@
 <script src="js/admin-store.js"></script>
 <script src="js/schedule-store.js"></script>
 <script src="js/admin.js"></script>
+
+  <!-- VOUCHER IMAGE MODAL -->
+  <div id="voucherImageModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(30,18,10,0.72);align-items:center;justify-content:center;padding:1rem">
+    <div style="background:#fff;border-radius:16px;padding:1.5rem;max-width:480px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.28)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h3 style="margin:0;font-size:1.1rem;color:#3D2B1F">Voucher image</h3>
+        <button type="button" id="voucherModalClose" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#888;line-height:1">&times;</button>
+      </div>
+      <canvas id="voucherCanvas" style="width:100%;border-radius:10px;display:block;box-shadow:0 2px 12px rgba(0,0,0,0.12)"></canvas>
+      <div style="display:flex;gap:0.75rem;margin-top:1rem;flex-wrap:wrap">
+        <button type="button" id="voucherDownloadBtn" class="btn btn-primary" style="flex:1">&#8681; Download image</button>
+        <button type="button" id="voucherShareBtn" class="btn btn-secondary" style="flex:1">Share via WhatsApp</button>
+      </div>
+      <p style="font-size:0.78rem;color:#aaa;margin-top:0.75rem;text-align:center">On mobile, use Share to send directly. On desktop, download and attach to a message.</p>
+    </div>
+  </div>
+
 </body>
 </html>
