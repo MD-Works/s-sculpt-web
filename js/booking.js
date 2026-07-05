@@ -247,14 +247,8 @@
     data._available = available;
     appliedDiscountAmount = available;
     appliedVoucherLabel = `Voucher (${code})`;
-    // Show available balance (full amount, or remaining balance if partially used)
-    const available = (data.balance_remaining !== null && data.balance_remaining !== undefined)
-      ? Number(data.balance_remaining)
-      : Number(data.amount);
     voucherFeedback.textContent = `Voucher applied — ${formatCurrency(available)} available on this voucher.`;
     voucherFeedback.style.color = "var(--success)";
-    // Store the available amount on the voucher object for use at checkout
-    data._available = available;
     renderSummary();
   });
 
