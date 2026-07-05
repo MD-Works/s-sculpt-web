@@ -45,6 +45,7 @@
       <button data-panel="specials"><span class="nav-icon">&#9670;</span><span class="nav-label">Specials</span></button>
       <button data-panel="hours"><span class="nav-icon">&#9670;</span><span class="nav-label">Hours</span></button>
       <button data-panel="bookings"><span class="nav-icon">&#9670;</span><span class="nav-label">Bookings</span></button>
+      <button data-panel="customers"><span class="nav-icon">&#9670;</span><span class="nav-label">Customers</span></button>
       <button data-panel="vouchers"><span class="nav-icon">&#9670;</span><span class="nav-label">Vouchers</span></button>
       <button data-panel="database"><span class="nav-icon">&#9670;</span><span class="nav-label">Database</span></button>
     </nav>
@@ -176,6 +177,91 @@
       <div class="admin-list" id="bookingList"></div>
     </section>
 
+
+    <!-- CUSTOMERS -->
+    <section class="admin-panel" data-panel="customers">
+      <div class="admin-topbar">
+        <div>
+          <h2>Customers</h2>
+          <p>All customers who have booked through the site. Click a customer to view their full history and manage loyalty points.</p>
+        </div>
+      </div>
+
+      <div style="margin-bottom:1rem">
+        <input type="text" id="customerSearch" class="field-input" placeholder="Search by name or phone number…" style="width:100%;max-width:360px">
+      </div>
+
+      <div class="admin-list" id="customerList"></div>
+
+      <!-- Customer profile drawer -->
+      <div id="customerDrawer" hidden style="position:fixed;inset:0;z-index:200;display:flex;align-items:flex-start;justify-content:flex-end;background:rgba(30,18,10,0.55)">
+        <div style="background:#fff;width:100%;max-width:520px;height:100vh;overflow-y:auto;box-shadow:-4px 0 32px rgba(0,0,0,0.18);display:flex;flex-direction:column">
+
+          <!-- Drawer header -->
+          <div style="padding:1.25rem 1.5rem;border-bottom:1px solid var(--clr-border,#e5d9c8);display:flex;justify-content:space-between;align-items:flex-start;background:var(--clr-bg,#faf6f0);position:sticky;top:0;z-index:1">
+            <div>
+              <p id="drawerName" style="font-weight:700;font-size:1.15rem;color:var(--clr-heading,#3D2B1F);margin:0"></p>
+              <p id="drawerMeta" style="font-size:0.85rem;color:#888;margin:0.2rem 0 0"></p>
+            </div>
+            <button type="button" id="drawerClose" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:#888;line-height:1;padding:0">&times;</button>
+          </div>
+
+          <!-- Stats row -->
+          <div id="drawerStats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-bottom:1px solid var(--clr-border,#e5d9c8)"></div>
+
+          <!-- Tabs -->
+          <div style="display:flex;border-bottom:1px solid var(--clr-border,#e5d9c8)">
+            <button type="button" class="drawer-tab is-active" data-tab="bookings" style="flex:1;padding:0.75rem;border:none;background:none;cursor:pointer;font-weight:600;font-size:0.9rem;color:var(--clr-accent,#C9A24B);border-bottom:2px solid var(--clr-accent,#C9A24B)">Bookings</button>
+            <button type="button" class="drawer-tab" data-tab="loyalty" style="flex:1;padding:0.75rem;border:none;background:none;cursor:pointer;font-size:0.9rem;color:#888;border-bottom:2px solid transparent">Loyalty</button>
+            <button type="button" class="drawer-tab" data-tab="adjust" style="flex:1;padding:0.75rem;border:none;background:none;cursor:pointer;font-size:0.9rem;color:#888;border-bottom:2px solid transparent">Add points</button>
+          </div>
+
+          <!-- Tab content -->
+          <div style="flex:1;padding:1rem 1.5rem">
+
+            <!-- Bookings tab -->
+            <div id="tabBookings" class="drawer-tab-content">
+              <div id="drawerBookingList" style="display:flex;flex-direction:column;gap:0.75rem"></div>
+            </div>
+
+            <!-- Loyalty tab -->
+            <div id="tabLoyalty" class="drawer-tab-content" hidden>
+              <div id="drawerLoyaltyList" style="display:flex;flex-direction:column;gap:0.5rem"></div>
+            </div>
+
+            <!-- Add points tab -->
+            <div id="tabAdjust" class="drawer-tab-content" hidden>
+              <p style="font-size:0.9rem;color:#888;margin-bottom:1rem">Manually award or deduct points — for walk-in Yoco payments, referrals, promotions, or corrections.</p>
+              <div style="display:grid;gap:0.75rem">
+                <div>
+                  <label class="field-label" for="adjPoints">Points (use negative to deduct)</label>
+                  <input type="number" id="adjPoints" class="field-input" placeholder="e.g. 45" style="width:100%">
+                </div>
+                <div>
+                  <label class="field-label" for="adjReason">Reason</label>
+                  <select id="adjReason" class="field-input" style="width:100%">
+                    <option value="instore_payment">Walk-in / Yoco payment</option>
+                    <option value="referral">Referral</option>
+                    <option value="promotion">Promotion / special offer</option>
+                    <option value="correction">Correction</option>
+                    <option value="manual_adjustment">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="field-label" for="adjNotes">Notes (optional)</label>
+                  <input type="text" id="adjNotes" class="field-input" placeholder="e.g. Paid R450 cash for RF session" style="width:100%">
+                </div>
+                <div>
+                  <button type="button" class="btn btn-primary" id="adjSubmitBtn">Add points</button>
+                </div>
+                <p id="adjFeedback" style="font-size:0.9rem"></p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- VOUCHERS -->
     <section class="admin-panel" data-panel="vouchers">
