@@ -241,7 +241,7 @@
 
     appliedVoucher = data;
     // Use remaining balance if partially used, otherwise full amount
-    const available = (data.balance_remaining !== null && data.balance_remaining !== undefined)
+    let available = (data.balance_remaining !== null && data.balance_remaining !== undefined)
       ? Number(data.balance_remaining)
       : Number(data.amount);
     data._available = available;
