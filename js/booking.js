@@ -364,9 +364,12 @@
     confirmBookingBtn.disabled = false;
     confirmBookingBtn.textContent = "Confirm booking";
 
-    // Earn loyalty points for this spend, keyed by phone number.
-    if (window.SSculptLoyalty) {
-      await window.SSculptLoyalty.addSpend(phoneInput.value.trim(), nameInput.value.trim(), total, saved.id);
+    // Earn loyalty points on the treatment's full base price, not the discounted
+    // total — a R600 voucher on a R450 treatment should still earn 45 points.
+    // Penalising customers for using a voucher would discourage them.
+    const { base } = getPriceBreakdown();
+    if (window.SSculptLoyalty && base > 0) {
+      await window.SSculptLoyalty.addSpend(phoneInput.value.trim(), nameInput.value.trim(), base, saved.id);
     }
 
     // Push to her real Google Calendar. Best-effort: if this fails (e.g.
