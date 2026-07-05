@@ -43,6 +43,7 @@ async function showShell() {
   document.getElementById("adminShell").style.display = "grid";
   await Promise.all([renderTreatments("sculpt"), renderSpecials(), renderHours(), renderBlockedDates(), renderBookings(), renderVouchers()]);
   initVoucherAdmin();
+  initCustomersPanel();
   await renderStats();
 }
 
@@ -747,6 +748,338 @@ function openVoucherModal(voucherData) {
   };
 }
 
+
+// ============================================================
+// CUSTOMERS PANEL
+// ============================================================
+
+let currentCustomerPhone = null; // tracks which customer's drawer is open
+
+async function renderCustomers(searchTerm = "") {
+  const list = document.getElementById("customerList");
+  if (!list) return;
+  list.innerHTML = `<div class="admin-empty">Loading…</div>`;
+
+  // Pull all bookings + loyalty balances to build customer profiles
+  const [{ data: bookings, error: bErr }, { data: loyalty, error: lErr }] = await Promise.all([
+    sb.from("bookings").select("customer_phone, customer_name, customer_email, booking_date, price_charged, status, voucher_id, voucher_discount, treatment_id, treatments(name)").order("booking_date", { ascending: false }),
+    sb.from("loyalty_balances").select("customer_phone, customer_name, balance"),
+  ]);
+
+  if (bErr || lErr) {
+    list.innerHTML = `<div class="admin-empty">Could not load customers.</div>`;
+    return;
+  }
+
+  // Group bookings by phone to build one profile per customer
+  const profileMap = {};
+  for (const b of (bookings || [])) {
+    const phone = b.customer_phone;
+    if (!profileMap[phone]) {
+      profileMap[phone] = {
+        phone,
+        name: b.customer_name,
+        email: b.customer_email || null,
+        bookings: [],
+        totalSpend: 0,
+        lastBooking: b.booking_date,
+      };
+    }
+    const p = profileMap[phone];
+    p.bookings.push(b);
+    if (b.status !== "cancelled") p.totalSpend += Number(b.price_charged || 0);
+    if (b.booking_date > p.lastBooking) {
+      p.lastBooking = b.booking_date;
+      p.name = b.customer_name; // use most recent name
+      if (b.customer_email) p.email = b.customer_email;
+    }
+  }
+
+  // Attach loyalty balance
+  const loyaltyMap = {};
+  for (const l of (loyalty || [])) loyaltyMap[l.customer_phone] = Number(l.balance || 0);
+
+  let profiles = Object.values(profileMap)
+    .map(p => ({ ...p, points: loyaltyMap[p.phone] || 0 }))
+    .sort((a, b) => (b.lastBooking || "").localeCompare(a.lastBooking || ""));
+
+  // Apply search filter
+  if (searchTerm) {
+    const q = searchTerm.toLowerCase();
+    profiles = profiles.filter(p =>
+      p.name.toLowerCase().includes(q) || p.phone.includes(q)
+    );
+  }
+
+  list.innerHTML = "";
+
+  if (profiles.length === 0) {
+    list.innerHTML = `<div class="admin-empty">${searchTerm ? "No customers match that search." : "No customers yet."}</div>`;
+    return;
+  }
+
+  profiles.forEach(p => {
+    const lastDate = p.lastBooking
+      ? new Date(p.lastBooking + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
+      : "—";
+    const tier = p.points >= 500 ? "Gold" : p.points >= 200 ? "Silver" : "Bronze";
+    const tierColour = p.points >= 500 ? "#C9A24B" : p.points >= 200 ? "#888" : "#8B6000";
+
+    const card = document.createElement("div");
+    card.className = "admin-card";
+    card.style.cursor = "pointer";
+    card.innerHTML = `
+      <div class="admin-card-body">
+        <p class="admin-card-name">${escapeHtml(p.name)}
+          <span class="admin-pill" style="background:${tierColour};color:#fff;margin-left:6px">${tier}</span>
+        </p>
+        <p class="admin-card-meta">
+          ${escapeHtml(p.phone)}
+          ${p.email ? `<span class="sep">&middot;</span> ${escapeHtml(p.email)}` : ""}
+        </p>
+        <p class="admin-card-desc">
+          ${p.bookings.length} booking${p.bookings.length === 1 ? "" : "s"}
+          <span class="sep">&middot;</span> R${Number(p.totalSpend).toLocaleString("en-ZA")} total spend
+          <span class="sep">&middot;</span> ${p.points} pts
+          <span class="sep">&middot;</span> Last: ${lastDate}
+        </p>
+      </div>
+      <div class="admin-card-actions">
+        <button class="btn btn-ghost btn-sm" data-action="open-customer" data-phone="${escapeHtml(p.phone)}">View profile</button>
+      </div>
+    `;
+    card.addEventListener("click", (e) => {
+      if (!e.target.closest("button")) openCustomerDrawer(p.phone, profiles);
+    });
+    list.appendChild(card);
+  });
+}
+
+async function openCustomerDrawer(phone, profiles) {
+  currentCustomerPhone = phone;
+  const profile = profiles.find(p => p.phone === phone);
+  if (!profile) return;
+
+  const drawer = document.getElementById("customerDrawer");
+  drawer.hidden = false;
+  drawer.style.display = "flex";
+
+  // Header
+  document.getElementById("drawerName").textContent = profile.name;
+  document.getElementById("drawerMeta").textContent = `${profile.phone}${profile.email ? "  ·  " + profile.email : ""}`;
+
+  // Stats
+  const tier = profile.points >= 500 ? "Gold" : profile.points >= 200 ? "Silver" : "Bronze";
+  const activeBookings = profile.bookings.filter(b => b.status !== "cancelled").length;
+  document.getElementById("drawerStats").innerHTML = `
+    <div style="padding:1rem;text-align:center;border-right:1px solid var(--clr-border,#e5d9c8)">
+      <p style="font-size:1.4rem;font-weight:700;color:var(--clr-heading,#3D2B1F);margin:0">${activeBookings}</p>
+      <p style="font-size:0.75rem;color:#888;margin:0">Bookings</p>
+    </div>
+    <div style="padding:1rem;text-align:center;border-right:1px solid var(--clr-border,#e5d9c8)">
+      <p style="font-size:1.4rem;font-weight:700;color:var(--clr-heading,#3D2B1F);margin:0">R${Number(profile.totalSpend).toLocaleString("en-ZA")}</p>
+      <p style="font-size:0.75rem;color:#888;margin:0">Total spend</p>
+    </div>
+    <div style="padding:1rem;text-align:center">
+      <p style="font-size:1.4rem;font-weight:700;color:var(--clr-accent,#C9A24B);margin:0">${profile.points} pts</p>
+      <p style="font-size:0.75rem;color:#888;margin:0">${tier}</p>
+    </div>
+  `;
+
+  // Switch to bookings tab by default
+  switchDrawerTab("bookings");
+
+  // Render bookings tab
+  const bookingList = document.getElementById("drawerBookingList");
+  bookingList.innerHTML = "";
+  const sorted = [...profile.bookings].sort((a, b) => (b.booking_date || "").localeCompare(a.booking_date || ""));
+  sorted.forEach(b => {
+    const dateLabel = b.booking_date
+      ? new Date(b.booking_date + "T00:00:00").toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short", year: "numeric" })
+      : "—";
+    const isCancelled = b.status === "cancelled";
+    const treatmentName = b.treatments?.name || "Treatment";
+    const div = document.createElement("div");
+    div.style.cssText = "padding:0.75rem;border:1px solid var(--clr-border,#e5d9c8);border-radius:8px;opacity:" + (isCancelled ? "0.5" : "1");
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <p style="font-weight:600;margin:0;font-size:0.9rem">${escapeHtml(treatmentName)}
+            ${isCancelled ? '<span class="admin-pill" style="margin-left:4px">Cancelled</span>' : ""}
+            ${b.voucher_id ? '<span style="font-size:0.8rem;color:var(--clr-accent,#C9A24B);margin-left:4px">&#127873; Voucher</span>' : ""}
+          </p>
+          <p style="margin:0.2rem 0 0;font-size:0.8rem;color:#888">${dateLabel}</p>
+        </div>
+        <p style="font-weight:700;margin:0;font-size:0.95rem;color:var(--clr-heading,#3D2B1F)">R${Number(b.price_charged || 0).toLocaleString("en-ZA")}</p>
+      </div>
+    `;
+    bookingList.appendChild(div);
+  });
+
+  if (sorted.length === 0) {
+    bookingList.innerHTML = `<p style="color:#888;font-size:0.9rem">No bookings found.</p>`;
+  }
+
+  // Load loyalty tab data
+  const { data: txns } = await sb
+    .from("loyalty_transactions")
+    .select("*")
+    .eq("customer_phone", phone)
+    .order("created_at", { ascending: false });
+
+  const loyaltyList = document.getElementById("drawerLoyaltyList");
+  loyaltyList.innerHTML = "";
+  if (!txns || txns.length === 0) {
+    loyaltyList.innerHTML = `<p style="color:#888;font-size:0.9rem">No loyalty transactions yet.</p>`;
+  } else {
+    txns.forEach(t => {
+      const date = new Date(t.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+      const isPositive = t.points_delta > 0;
+      const reasonLabels = {
+        booking: "Booking", instore_payment: "Walk-in payment", referral: "Referral",
+        promotion: "Promotion", correction: "Correction", manual_adjustment: "Manual adjustment",
+        redemption: "Redeemed",
+      };
+      const reasonLabel = reasonLabels[t.reason] || t.reason;
+      const div = document.createElement("div");
+      div.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--clr-border,#e5d9c8)";
+      div.innerHTML = `
+        <div>
+          <p style="margin:0;font-size:0.88rem;font-weight:600">${reasonLabel}</p>
+          <p style="margin:0;font-size:0.78rem;color:#888">${date}${t.notes ? "  ·  " + escapeHtml(t.notes) : ""}</p>
+        </div>
+        <p style="margin:0;font-weight:700;font-size:0.95rem;color:${isPositive ? "var(--success,#3A6B35)" : "#b3543f"}">
+          ${isPositive ? "+" : ""}${t.points_delta} pts
+        </p>
+      `;
+      loyaltyList.appendChild(div);
+    });
+  }
+
+  // Reset adjust form
+  document.getElementById("adjPoints").value = "";
+  document.getElementById("adjNotes").value = "";
+  document.getElementById("adjFeedback").textContent = "";
+  document.getElementById("adjSubmitBtn").textContent = "Add points";
+}
+
+function switchDrawerTab(tabName) {
+  document.querySelectorAll(".drawer-tab").forEach(btn => {
+    const active = btn.dataset.tab === tabName;
+    btn.style.color = active ? "var(--clr-accent,#C9A24B)" : "#888";
+    btn.style.borderBottomColor = active ? "var(--clr-accent,#C9A24B)" : "transparent";
+    btn.style.fontWeight = active ? "600" : "400";
+    btn.classList.toggle("is-active", active);
+  });
+  document.querySelectorAll(".drawer-tab-content").forEach(div => {
+    div.hidden = div.id !== "tab" + tabName.charAt(0).toUpperCase() + tabName.slice(1);
+  });
+}
+
+function initCustomersPanel() {
+  // Search
+  const search = document.getElementById("customerSearch");
+  if (search) {
+    let debounce;
+    search.addEventListener("input", () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => renderCustomers(search.value.trim()), 280);
+    });
+  }
+
+  // Drawer close
+  const drawer = document.getElementById("customerDrawer");
+  document.getElementById("drawerClose")?.addEventListener("click", () => {
+    drawer.hidden = true;
+    drawer.style.display = "none";
+    currentCustomerPhone = null;
+  });
+  drawer?.addEventListener("click", (e) => {
+    if (e.target === drawer) {
+      drawer.hidden = true;
+      drawer.style.display = "none";
+      currentCustomerPhone = null;
+    }
+  });
+
+  // Drawer tabs
+  document.querySelectorAll(".drawer-tab").forEach(btn => {
+    btn.addEventListener("click", () => switchDrawerTab(btn.dataset.tab));
+  });
+
+  // Manual points adjustment
+  document.getElementById("adjSubmitBtn")?.addEventListener("click", async () => {
+    if (!currentCustomerPhone) return;
+    const pointsVal = parseInt(document.getElementById("adjPoints").value);
+    const reason = document.getElementById("adjReason").value;
+    const notes = document.getElementById("adjNotes").value.trim();
+    const feedback = document.getElementById("adjFeedback");
+
+    if (!pointsVal || isNaN(pointsVal) || pointsVal === 0) {
+      feedback.style.color = "#b3543f";
+      feedback.textContent = "Enter a points value (positive to add, negative to deduct).";
+      return;
+    }
+
+    document.getElementById("adjSubmitBtn").disabled = true;
+    document.getElementById("adjSubmitBtn").textContent = "Saving…";
+
+    // Get customer name from the drawer header
+    const customerName = document.getElementById("drawerName").textContent;
+
+    const { error } = await sb.from("loyalty_transactions").insert({
+      customer_phone: currentCustomerPhone,
+      customer_name: customerName,
+      points_delta: pointsVal,
+      reason,
+      notes: notes || null,
+      related_booking_id: null,
+    });
+
+    document.getElementById("adjSubmitBtn").disabled = false;
+    document.getElementById("adjSubmitBtn").textContent = "Add points";
+
+    if (error) {
+      feedback.style.color = "#b3543f";
+      feedback.textContent = "Something went wrong — please try again.";
+      return;
+    }
+
+    feedback.style.color = "var(--success,#3A6B35)";
+    feedback.textContent = `✓ ${pointsVal > 0 ? "+" : ""}${pointsVal} points saved.`;
+    document.getElementById("adjPoints").value = "";
+    document.getElementById("adjNotes").value = "";
+
+    // Refresh the loyalty tab and customer list
+    await renderCustomers(document.getElementById("customerSearch")?.value || "");
+    // Re-open the drawer with fresh data
+    const search = document.getElementById("customerSearch")?.value || "";
+    const { data: bookings } = await sb.from("bookings").select("customer_phone, customer_name, customer_email, booking_date, price_charged, status, voucher_id, voucher_discount, treatment_id, treatments(name)").order("booking_date", { ascending: false });
+    const { data: loyalty } = await sb.from("loyalty_balances").select("customer_phone, customer_name, balance");
+    const profileMap = {};
+    for (const b of (bookings || [])) {
+      const phone = b.customer_phone;
+      if (!profileMap[phone]) profileMap[phone] = { phone, name: b.customer_name, email: b.customer_email || null, bookings: [], totalSpend: 0, lastBooking: b.booking_date };
+      const p = profileMap[phone];
+      p.bookings.push(b);
+      if (b.status !== "cancelled") p.totalSpend += Number(b.price_charged || 0);
+    }
+    const loyaltyMap = {};
+    for (const l of (loyalty || [])) loyaltyMap[l.customer_phone] = Number(l.balance || 0);
+    const profiles = Object.values(profileMap).map(p => ({ ...p, points: loyaltyMap[p.phone] || 0 }));
+    openCustomerDrawer(currentCustomerPhone, profiles);
+  });
+
+  // open-customer action from card button
+  document.getElementById("customerList")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action='open-customer']");
+    if (btn) {
+      // Drawer opened by card click — button click also fires, prevent double open
+      e.stopPropagation();
+    }
+  });
+}
+
 function generateVoucherCode() {
   const words = ["GLOW","SILK","ROSE","SCULPT","GOLD","BLOOM","LIFT","LUXE","SOFT","SHINE"];
   const w1 = words[Math.floor(Math.random() * words.length)];
@@ -974,6 +1307,9 @@ document.addEventListener("DOMContentLoaded", async () => {
           await renderSpecials();
           toast("Special deleted.");
         }
+        break;
+      case "open-customer":
+        // handled by card click listener in initCustomersPanel
         break;
       case "copy-voucher-code":
         navigator.clipboard.writeText(e.target.dataset.code || "").then(() => toast("Code copied!")).catch(() => toast("Copy failed — select the code manually."));
