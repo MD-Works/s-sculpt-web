@@ -175,8 +175,11 @@
   function getPriceBreakdown() {
     const t = window.findTreatment(treatmentSelect.value);
     const base = t ? t.price : 0;
-    const total = Math.max(0, base - appliedDiscountAmount);
-    return { base, discountAmount: appliedDiscountAmount, total, treatment: t };
+    // Cap the discount at the treatment price — a R600 voucher on a R450
+    // treatment should show -R450 discount and R0 total, not -R600.
+    const discountAmount = Math.min(appliedDiscountAmount, base);
+    const total = Math.max(0, base - discountAmount);
+    return { base, discountAmount, total, treatment: t };
   }
 
   function renderSummary() {
