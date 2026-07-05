@@ -241,14 +241,14 @@
 
     appliedVoucher = data;
     // Use remaining balance if partially used, otherwise full amount
-    let available = (data.balance_remaining !== null && data.balance_remaining !== undefined)
+    const available = (data.balance_remaining !== null && data.balance_remaining !== undefined)
       ? Number(data.balance_remaining)
       : Number(data.amount);
     data._available = available;
     appliedDiscountAmount = available;
     appliedVoucherLabel = `Voucher (${code})`;
     // Show available balance (full amount, or remaining balance if partially used)
-    available = (data.balance_remaining !== null && data.balance_remaining !== undefined)
+    const available = (data.balance_remaining !== null && data.balance_remaining !== undefined)
       ? Number(data.balance_remaining)
       : Number(data.amount);
     voucherFeedback.textContent = `Voucher applied — ${formatCurrency(available)} available on this voucher.`;
