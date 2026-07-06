@@ -150,12 +150,13 @@ const ScheduleStore = {
   async getBookingsForDate(dateStr) {
     const { data, error } = await sb
       .from("bookings")
-      .select("*, treatments(duration_minutes)")
+      .select("*, treatments(duration_minutes, stations)")
       .eq("booking_date", dateStr);
     if (error) return handleSbError(error, []);
     return data.map((row) => ({
       ...normalizeBookingRow(row),
       durationMinutes: row.treatments ? row.treatments.duration_minutes : 60,
+      treatmentStations: row.treatments ? (row.treatments.stations || 1) : 1,
     }));
   },
 
@@ -201,13 +202,24 @@ const ScheduleStore = {
 
   // ---------- Slot computation ----------
   // Returns an array of "HH:MM" strings: every slot start time on
-  // dateStr where a treatment of durationMinutes would fit, given
-  // business hours, blocked dates, and existing confirmed bookings.
-  async getOpenSlots(dateStr, durationMinutes) {
+  // dateStr where a specific treatment would fit.
+  //
+  // KEY CHANGE: treatments are now independent — a booking for RF does
+  // not block a slot for Laser Lipolysis. Each treatment has a `stations`
+  // count (default 1) — the number of machines/beds available for that
+  // treatment simultaneously. A slot is only blocked for treatment X when
+  // `stations` or more bookings for treatment X already overlap that slot.
+  //
+  // Parameters:
+  //   dateStr        — "YYYY-MM-DD"
+  //   durationMinutes — the new treatment's session length
+  //   treatmentId    — the treatment being booked (used to filter bookings)
+  //   stations       — how many concurrent bookings are allowed (default 1)
+  async getOpenSlots(dateStr, durationMinutes, treatmentId, stations) {
     const blocked = await this.getBlockedDates();
     if (blocked.includes(dateStr)) return [];
 
-    // Avoid timezone drift: parse the date string as local, not UTC.
+    // Avoid timezone drift: parse as local date, not UTC.
     const [y, m, d] = dateStr.split("-").map(Number);
     const weekday = new Date(y, m - 1, d).getDay();
 
@@ -219,14 +231,15 @@ const ScheduleStore = {
     const dayStart = timeToMinutes(dayHours.start);
     const dayEnd = timeToMinutes(dayHours.end);
     const duration = durationMinutes || 60;
+    const maxConcurrent = stations || 1;
 
     const dayBookings = await this.getBookingsForDate(dateStr);
-    const existingRanges = dayBookings
-      .filter((b) => b.status !== "cancelled")
-      .map((b) => {
-        const start = timeToMinutes(b.time);
-        return { start, end: start + (b.durationMinutes || 60) };
-      });
+
+    // Only consider active bookings for THIS specific treatment.
+    // Bookings for other treatments are irrelevant — different machines.
+    const relevantBookings = treatmentId
+      ? dayBookings.filter((b) => b.status !== "cancelled" && b.treatmentId === treatmentId)
+      : dayBookings.filter((b) => b.status !== "cancelled");
 
     const now = new Date();
     const isToday = now.getFullYear() === y && now.getMonth() === m - 1 && now.getDate() === d;
@@ -237,8 +250,16 @@ const ScheduleStore = {
       if (isToday && start <= nowMinutes) continue;
 
       const end = start + duration;
-      const overlaps = existingRanges.some((r) => start < r.end && end > r.start);
-      if (!overlaps) slots.push(minutesToTime(start));
+
+      // Count how many existing bookings for this treatment overlap this slot.
+      const concurrentCount = relevantBookings.filter((b) => {
+        const bStart = timeToMinutes(b.time);
+        const bEnd = bStart + (b.durationMinutes || 60);
+        return start < bEnd && end > bStart;
+      }).length;
+
+      // Slot is available as long as we haven't hit the stations limit.
+      if (concurrentCount < maxConcurrent) slots.push(minutesToTime(start));
     }
     return slots;
   },

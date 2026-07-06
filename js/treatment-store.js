@@ -27,6 +27,8 @@ function normalizeTreatmentRow(row) {
     // null = no override (follow the global payment setting),
     // true = always allow instore for this treatment, false = never.
     allowInstore: row.allow_instore === undefined ? null : row.allow_instore,
+    imageUrl: row.image_url || null,
+    stations: row.stations !== undefined ? Number(row.stations) : 1,
   };
 }
 
@@ -75,6 +77,8 @@ const TreatmentStore = {
       sessions_count: sessionsCount,
       description: treatment.desc || "",
       allow_instore: treatment.allowInstore === undefined ? null : treatment.allowInstore,
+      image_url: treatment.imageUrl || null,
+      stations: treatment.stations !== undefined ? Number(treatment.stations) : 1,
     };
 
     if (treatment.id) {

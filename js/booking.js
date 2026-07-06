@@ -28,8 +28,6 @@
   const successWhatsappBtn = document.getElementById("successWhatsappBtn");
   const newBookingBtn = document.getElementById("newBookingBtn");
   const confirmBookingBtn = document.getElementById("confirmBookingBtn");
-  const payOptionsContainer = document.getElementById("payOptionsContainer");
-  const payOptionsHint = document.getElementById("payOptionsHint");
 
   function resetBookingForm() {
     bookingSuccess.hidden = true;
@@ -37,47 +35,17 @@
     form.reset();
     appliedVoucher = null;
     if (voucherFeedback) voucherFeedback.textContent = "";
-    // Clear the ?payment=success params so a page refresh doesn't re-trigger the PayFast return handler
     window.history.replaceState({}, "", window.location.pathname);
     goToStep(1);
   }
 
   newBookingBtn.addEventListener("click", resetBookingForm);
 
-  let cachedPaymentSettings = null;
 
   // Decides which payment method radios to show for the currently
   // selected treatment + price, based on the admin's global settings
   // and that treatment's own override (see schedule-store.js's
   // isInstoreAllowed for the combining rules).
-  async function renderPaymentOptions() {
-    if (!cachedPaymentSettings) {
-      cachedPaymentSettings = await ScheduleStore.getPaymentSettings();
-    }
-    const { total, treatment } = getPriceBreakdown();
-    const instoreAllowed = ScheduleStore.isInstoreAllowed(cachedPaymentSettings, treatment, total);
-
-    payOptionsContainer.innerHTML = `
-      <label class="pay-option">
-        <input type="radio" name="payMethod" value="card" checked>
-        <span>Pay online now (card / Instant EFT via PayFast)</span>
-      </label>
-      ${
-        instoreAllowed
-          ? `<label class="pay-option">
-              <input type="radio" name="payMethod" value="instore">
-              <span>Pay in salon</span>
-            </label>`
-          : ""
-      }
-    `;
-
-    if (!instoreAllowed) {
-      payOptionsHint.textContent = "Online payment is required for this booking.";
-    } else {
-      payOptionsHint.textContent = "Card payments are processed securely via PayFast.";
-    }
-  }
 
   // Minimum bookable date = today (slots already in the past are filtered out)
   const today = new Date();
@@ -103,7 +71,7 @@
     }
 
     const duration = durationToMinutes(t);
-    const slots = await ScheduleStore.getOpenSlots(dateInput.value, duration);
+    const slots = await ScheduleStore.getOpenSlots(dateInput.value, duration, t ? t.id : null, t ? (t.stations || 1) : 1);
 
     timeSelect.innerHTML = `<option value="" disabled selected>Choose a time</option>`;
     if (slots.length === 0) {
@@ -134,7 +102,6 @@
     });
     if (step === 4) {
       renderSummary();
-      renderPaymentOptions();
     }
   }
 
@@ -265,12 +232,6 @@
     confirmBookingBtn.disabled = true;
     confirmBookingBtn.textContent = "Booking…";
 
-    const paymentMethod = form.querySelector('input[name="payMethod"]:checked')?.value || "card";
-
-    // Voucher that covers the full price needs no payment step either way —
-    // treat it like an instore booking (nothing to charge online).
-    const needsOnlinePayment = paymentMethod === "card" && total > 0;
-
     const saved = await ScheduleStore.saveBooking({
       date: dateInput.value,
       time: timeSelect.value,
@@ -282,7 +243,7 @@
       total,
       voucherId: appliedVoucher ? appliedVoucher.id : null,
       voucherDiscount: appliedVoucher ? getPriceBreakdown().discountAmount : null,
-      paymentMethod,
+      paymentMethod: "instore",
       whatsappOptIn: whatsappOptIn.checked,
     });
 
@@ -318,45 +279,7 @@
         .eq("id", appliedVoucher.id);
     }
 
-    if (needsOnlinePayment) {
-      // Hand off to PayFast. The booking already exists in Supabase as
-      // "pending"/"unpaid", so nothing is lost if the customer abandons
-      // checkout on PayFast's side — she'll see it in the admin console
-      // either way and can follow up. Loyalty points and the Google
-      // Calendar sync are intentionally NOT done yet for this path —
-      // the payfast-itn webhook does both once payment is actually
-      // confirmed, since awarding points or booking calendar time for
-      // an unpaid slot would be premature.
-      const { data: checkoutData, error: checkoutError } = await sb.functions.invoke("pay-checkout", {
-        body: { booking_id: saved.id },
-      });
-
-      if (checkoutError || !checkoutData?.action_url) {
-        confirmBookingBtn.disabled = false;
-        confirmBookingBtn.textContent = "Confirm booking";
-        voucherFeedback.textContent = "Your booking is saved, but we couldn't start the payment step — please try again or contact the salon on WhatsApp to arrange payment.";
-        voucherFeedback.style.color = "#b3543f";
-        return;
-      }
-
-      // Build and submit a real form so the browser navigates to
-      // PayFast's hosted payment page (can't navigate via fetch/invoke).
-      const payForm = document.createElement("form");
-      payForm.method = "POST";
-      payForm.action = checkoutData.action_url;
-      Object.entries(checkoutData.fields).forEach(([key, value]) => {
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = key;
-        input.value = value;
-        payForm.appendChild(input);
-      });
-      document.body.appendChild(payForm);
-      payForm.submit();
-      return; // browser is navigating away — nothing more to do here
-    }
-
-    // ---- Instore / no-charge path: same as before, confirm immediately ----
+    // ---- Confirm immediately (instore only): same as before, confirm immediately ----
     const dateLabel = dateInput.value
       ? new Date(dateInput.value).toLocaleDateString("en-ZA", { day: "numeric", month: "long" })
       : "";
@@ -398,53 +321,5 @@
     }
   });
 
-  // ---- Handle return from PayFast (return_url / cancel_url) ----
-  // PayFast redirects the browser back here regardless of timing
-  // relative to the ITN webhook — the booking's real payment_status
-  // is only ever set by payfast-itn (server-to-server), never by this
-  // redirect. This just shows the right message and looks up the
-  // booking's current state to display to the customer.
-  async function handlePayfastReturn() {
-    const params = new URLSearchParams(window.location.search);
-    const paymentResult = params.get("payment");
-    const bookingId = params.get("booking_id");
-    if (!paymentResult || !bookingId) return false;
-
-    const { data: booking } = await sb
-      .from("bookings")
-      .select("*, treatments(name)")
-      .eq("id", bookingId)
-      .maybeSingle();
-
-    // Clear the URL params immediately so a page refresh doesn't re-show this screen
-    window.history.replaceState({}, "", window.location.pathname);
-
-    form.querySelector(".booking-steps").style.display = "none";
-    panels.forEach((p) => p.classList.remove("is-active"));
-    bookingSuccess.hidden = false;
-
-    if (paymentResult === "success") {
-      const dateLabel = booking?.booking_date
-        ? new Date(booking.booking_date).toLocaleDateString("en-ZA", { day: "numeric", month: "long" })
-        : "";
-      const treatmentName = booking?.treatments?.name || "your treatment";
-      bookingSuccessDetail.textContent = booking
-        ? `${treatmentName} on ${dateLabel}. Payment is being confirmed — you'll see it reflected shortly, and we'll be in touch if anything needs attention.`
-        : "Your payment is being confirmed. We'll be in touch shortly.";
-      if (booking?.whatsapp_opt_in) {
-        const msg = `Hi! I just paid online for my booking:\n${treatmentName}\n${dateLabel}\nName: ${booking.customer_name}`;
-        successWhatsappBtn.href = waLink(msg);
-        successWhatsappBtn.hidden = false;
-      }
-    } else {
-      bookingSuccessDetail.textContent = "Payment was cancelled — your booking slot wasn't confirmed. You can try again, or contact the salon on WhatsApp to arrange payment another way.";
-      successWhatsappBtn.hidden = true;
-    }
-
-    return true;
-  }
-
-  handlePayfastReturn().then((handled) => {
-    if (!handled) goToStep(1);
-  });
+  goToStep(1);
 })();

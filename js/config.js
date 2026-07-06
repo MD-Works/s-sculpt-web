@@ -54,3 +54,11 @@ function buildDurationLabel(durationMinutes, sessionsCount) {
   const sessions = Number(sessionsCount) || 1;
   return sessions > 1 ? `${sessions} x ${mins} min` : `${mins} min`;
 }
+
+// ---------- imgbb image hosting ----------
+// Get your free API key at https://api.imgbb.com/ (About menu → API)
+// This key is only used in the admin console which is password-protected.
+const IMGBB_CONFIG = {
+  apiKey: "", // ← paste your imgbb API key here
+  uploadUrl: "https://api.imgbb.com/1/upload",
+};

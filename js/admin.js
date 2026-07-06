@@ -95,7 +95,7 @@ async function renderTreatments(category) {
           t.active === false ? '<span class="admin-pill">Hidden</span>' : '<span class="admin-pill is-on">Live</span>'
         }</p>
         <p class="admin-card-meta">R${Number(t.price).toLocaleString("en-ZA")}<span class="sep">&middot;</span>${escapeHtml(t.duration)}</p>
-        <p class="admin-card-desc">${escapeHtml(t.desc || "")}</p>
+        <p class="admin-card-desc">${t.duration} &middot; ${t.stations > 1 ? t.stations + " stations" : "1 station"} &middot; ${escapeHtml(t.desc || "")}</p>
       </div>
       <div class="admin-card-actions">
         <button class="btn btn-ghost btn-sm" data-action="edit-treatment" data-id="${t.id}">Edit</button>
@@ -137,8 +137,18 @@ async function openTreatmentModal(id) {
     <input class="field-input" id="mSessions" type="number" min="1" step="1" value="${t ? t.sessionsCount || 1 : 1}" placeholder="1">
     <p class="field-hint" style="margin-top:0.3rem;">Leave at 1 for a single visit. For a multi-session package (like the 6x sculpting package), each booking still only takes up one session's worth of calendar time — this number is for display only ("6 x 120 min").</p>
 
+    <label class="field-label" style="margin-top:0.75rem">Number of stations / machines</label>
+    <input class="field-input" id="mStations" type="number" min="1" max="20" step="1" value="${t ? (t.stations || 1) : 1}" style="width:100px">
+    <p class="field-hint" style="margin-top:0.25rem">How many clients can have this treatment at the same time? Set to 1 unless she has multiple machines (e.g. 3 RF machines = 3). Bookings for different treatments never block each other.</p>
+
     <label class="field-label">Description</label>
     <textarea class="field-input" id="mDesc" placeholder="Short description shown on the treatment card">${t ? escapeHtml(t.desc || "") : ""}</textarea>
+
+    <label class="field-label" style="margin-top:0.5rem">Brochure / treatment image</label>
+    ${t && t.imageUrl ? `<div style="margin-bottom:0.5rem"><img src="${t.imageUrl}" alt="Current image" style="max-width:100%;max-height:160px;border-radius:6px;display:block"></div>` : ""}
+    <input type="file" id="mImageFile" accept="image/jpeg,image/png,image/webp" class="field-input" style="padding:0.35rem">
+    <p class="field-hint" style="margin-top:0.25rem">Upload a JPG, PNG or WebP (max 32 MB). Hosted on imgbb — leave empty to keep existing image.</p>
+    <p id="mImageFeedback" style="font-size:0.85rem;color:var(--clr-accent)"></p>
 
     <div class="admin-modal-actions">
       <button class="btn btn-ghost" data-action="close-modal">Cancel</button>
@@ -163,15 +173,49 @@ async function openTreatmentModal(id) {
     saveBtn.disabled = true;
     saveBtn.textContent = "Saving…";
 
+    // Upload image to imgbb if a file was selected
+    let imageUrl = t ? t.imageUrl : null;
+    const imageFile = modal.querySelector("#mImageFile")?.files?.[0];
+    if (imageFile) {
+      const imgFeedback = modal.querySelector("#mImageFeedback");
+      imgFeedback.textContent = "Uploading image…";
+      if (!IMGBB_CONFIG.apiKey) {
+        imgFeedback.style.color = "#b3543f";
+        imgFeedback.textContent = "imgbb API key not set in config.js — image not uploaded.";
+      } else {
+        try {
+          const formData = new FormData();
+          formData.append("image", imageFile);
+          const res = await fetch(`${IMGBB_CONFIG.uploadUrl}?key=${IMGBB_CONFIG.apiKey}`, { method: "POST", body: formData });
+          const json = await res.json();
+          if (json.success) {
+            imageUrl = json.data.display_url;
+            imgFeedback.style.color = "var(--clr-accent)";
+            imgFeedback.textContent = "✓ Image uploaded.";
+          } else {
+            imgFeedback.style.color = "#b3543f";
+            imgFeedback.textContent = "Upload failed — check your imgbb API key in config.js.";
+          }
+        } catch (err) {
+          imgFeedback.style.color = "#b3543f";
+          imgFeedback.textContent = "Upload error: " + err.message;
+        }
+      }
+    }
+
+    const stations = Number(modal.querySelector("#mStations")?.value) || 1;
+
     const result = await TreatmentStore.saveTreatment({
       id: id || undefined,
       name,
       price: Number(price),
       durationMinutes: Number(durationMinutes),
       sessionsCount: Number(sessionsCount),
+      stations,
       desc,
       category,
       active: t ? t.active : true,
+      imageUrl,
     });
 
     if (!result) {
@@ -976,6 +1020,216 @@ function switchDrawerTab(tabName) {
   });
 }
 
+
+// ---- Cash register / walk-in payment modal ----
+async function openCashRegister(customerPhone, customerName) {
+  const treatments = await TreatmentStore.getTreatments();
+  const activeTreatments = treatments.filter(t => t.active);
+
+  const modal = buildModal(`
+    <h3 style="margin-bottom:0.25rem">&#128180; Walk-in payment</h3>
+    <p style="font-size:0.85rem;color:#888;margin-bottom:1rem">${escapeHtml(customerName)}</p>
+
+    <label class="field-label">Treatment</label>
+    <select class="field-select" id="crTreatment">
+      <option value="">Select a treatment…</option>
+      ${activeTreatments.map(t => `<option value="${t.id}" data-price="${t.price}" data-name="${escapeAttr(t.name)}">${escapeHtml(t.name)} — R${Number(t.price).toLocaleString("en-ZA")}</option>`).join("")}
+    </select>
+
+    <label class="field-label" style="margin-top:0.75rem">Voucher code (optional)</label>
+    <div style="display:flex;gap:0.5rem">
+      <input class="field-input" id="crVoucher" placeholder="e.g. SCULPT-GLOW-ROSE-247" style="flex:1">
+      <button type="button" class="btn btn-ghost btn-sm" id="crApplyVoucher" style="white-space:nowrap">Apply</button>
+    </div>
+    <p id="crVoucherFeedback" style="font-size:0.82rem;margin-top:0.25rem"></p>
+
+    <div id="crSummary" style="margin-top:1rem;padding:1rem;background:var(--clr-bg,#faf6f0);border-radius:8px;border:1px solid var(--clr-border,#e5d9c8);display:none">
+      <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem">
+        <span style="color:#888;font-size:0.9rem">Treatment</span>
+        <span id="crSumTreatment" style="font-weight:600">—</span>
+      </div>
+      <div id="crSumVoucherRow" style="display:flex;justify-content:space-between;margin-bottom:0.4rem;display:none">
+        <span style="color:#888;font-size:0.9rem">Voucher</span>
+        <span id="crSumVoucher" style="color:var(--clr-accent,#C9A24B);font-weight:600"></span>
+      </div>
+      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--clr-border,#e5d9c8);padding-top:0.4rem">
+        <span style="font-weight:700">Total due</span>
+        <span id="crSumTotal" style="font-weight:700;font-size:1.1rem">—</span>
+      </div>
+    </div>
+
+    <label class="field-label" style="margin-top:0.75rem">Cash received (R)</label>
+    <input class="field-input" id="crCash" type="number" min="0" step="1" placeholder="0" style="width:100%">
+    <div id="crChangeRow" style="display:flex;justify-content:space-between;margin-top:0.5rem;padding:0.5rem 0.75rem;background:#e8f5e4;border-radius:6px;display:none">
+      <span style="font-weight:600;color:#3A6B35">Change to give</span>
+      <span id="crChange" style="font-weight:700;font-size:1.05rem;color:#3A6B35"></span>
+    </div>
+
+    <p id="crFeedback" style="font-size:0.85rem;margin-top:0.5rem"></p>
+
+    <div class="admin-modal-actions">
+      <button class="btn btn-ghost" data-action="close-modal">Cancel</button>
+      <button class="btn btn-primary" id="crConfirmBtn" disabled>Confirm payment</button>
+    </div>
+  `);
+
+  let selectedTreatment = null;
+  let appliedVoucher = null;
+  let discountAmount = 0;
+
+  function updateSummary() {
+    const summary = modal.querySelector("#crSummary");
+    const confirmBtn = modal.querySelector("#crConfirmBtn");
+    if (!selectedTreatment) { summary.style.display = "none"; confirmBtn.disabled = true; return; }
+
+    const total = Math.max(0, selectedTreatment.price - discountAmount);
+    summary.style.display = "block";
+    modal.querySelector("#crSumTreatment").textContent = `R${Number(selectedTreatment.price).toLocaleString("en-ZA")}`;
+
+    const voucherRow = modal.querySelector("#crSumVoucherRow");
+    if (discountAmount > 0) {
+      voucherRow.style.display = "flex";
+      modal.querySelector("#crSumVoucher").textContent = `-R${Number(discountAmount).toLocaleString("en-ZA")}`;
+    } else {
+      voucherRow.style.display = "none";
+    }
+    modal.querySelector("#crSumTotal").textContent = `R${Number(total).toLocaleString("en-ZA")}`;
+    confirmBtn.disabled = false;
+    updateChange();
+  }
+
+  function updateChange() {
+    if (!selectedTreatment) return;
+    const total = Math.max(0, selectedTreatment.price - discountAmount);
+    const cash = Number(modal.querySelector("#crCash").value) || 0;
+    const changeRow = modal.querySelector("#crChangeRow");
+    if (cash > 0 && cash >= total) {
+      changeRow.style.display = "flex";
+      modal.querySelector("#crChange").textContent = `R${Number(cash - total).toLocaleString("en-ZA")}`;
+    } else {
+      changeRow.style.display = "none";
+    }
+  }
+
+  // Treatment select
+  modal.querySelector("#crTreatment").addEventListener("change", (e) => {
+    const opt = e.target.selectedOptions[0];
+    if (!opt || !opt.value) { selectedTreatment = null; updateSummary(); return; }
+    selectedTreatment = { id: opt.value, name: opt.dataset.name, price: Number(opt.dataset.price) };
+    // Recalculate voucher discount cap
+    if (appliedVoucher) {
+      const available = appliedVoucher._available || Number(appliedVoucher.amount);
+      discountAmount = Math.min(available, selectedTreatment.price);
+    }
+    updateSummary();
+  });
+
+  // Cash input
+  modal.querySelector("#crCash").addEventListener("input", updateChange);
+
+  // Apply voucher
+  modal.querySelector("#crApplyVoucher").addEventListener("click", async () => {
+    const code = modal.querySelector("#crVoucher").value.trim().toUpperCase();
+    const feedback = modal.querySelector("#crVoucherFeedback");
+    if (!code) return;
+    feedback.style.color = "#888";
+    feedback.textContent = "Checking…";
+    const { data, error } = await sb.from("vouchers").select("*").eq("code", code).eq("is_redeemed", false).maybeSingle();
+    if (error || !data) {
+      feedback.style.color = "#b3543f";
+      feedback.textContent = "Voucher not found or already fully redeemed.";
+      appliedVoucher = null; discountAmount = 0; updateSummary();
+      return;
+    }
+    const available = (data.balance_remaining !== null && data.balance_remaining !== undefined)
+      ? Number(data.balance_remaining) : Number(data.amount);
+    data._available = available;
+    appliedVoucher = data;
+    discountAmount = selectedTreatment ? Math.min(available, selectedTreatment.price) : available;
+    feedback.style.color = "var(--clr-accent,#C9A24B)";
+    feedback.textContent = `✓ Voucher applied — R${available.toLocaleString("en-ZA")} available.`;
+    updateSummary();
+  });
+
+  // Confirm payment
+  modal.querySelector("#crConfirmBtn").addEventListener("click", async () => {
+    if (!selectedTreatment) return;
+    const confirmBtn = modal.querySelector("#crConfirmBtn");
+    const feedback = modal.querySelector("#crFeedback");
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Saving…";
+    feedback.textContent = "";
+
+    const total = Math.max(0, selectedTreatment.price - discountAmount);
+
+    // 1. Save booking as completed
+    const { data: booking, error: bookingErr } = await sb.from("bookings").insert({
+      treatment_id: selectedTreatment.id,
+      customer_name: customerName,
+      customer_phone: customerPhone,
+      booking_date: new Date().toISOString().split("T")[0],
+      booking_time: new Date().toTimeString().slice(0, 5),
+      price_charged: total,
+      status: "confirmed",
+      payment_method: "instore",
+      payment_status: "paid",
+      voucher_id: appliedVoucher ? appliedVoucher.id : null,
+      voucher_discount: discountAmount > 0 ? discountAmount : null,
+    }).select().single();
+
+    if (bookingErr) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Confirm payment";
+      feedback.style.color = "#b3543f";
+      feedback.textContent = "Could not save booking — please try again.";
+      return;
+    }
+
+    // 2. Redeem voucher if applied
+    if (appliedVoucher) {
+      const available = appliedVoucher._available || Number(appliedVoucher.amount);
+      const amountUsed = discountAmount;
+      const balanceAfter = Math.max(0, available - amountUsed);
+      await sb.from("vouchers").update({
+        is_redeemed: balanceAfter <= 0,
+        redeemed_booking_id: booking.id,
+        redeemed_at: new Date().toISOString(),
+        amount_used: amountUsed,
+        balance_remaining: balanceAfter <= 0 ? 0 : balanceAfter,
+      }).eq("id", appliedVoucher.id);
+    }
+
+    // 3. Award loyalty points on full treatment price
+    await sb.from("loyalty_transactions").insert({
+      customer_phone: customerPhone,
+      customer_name: customerName,
+      points_delta: Math.floor(selectedTreatment.price / 10),
+      reason: "instore_payment",
+      related_booking_id: booking.id,
+      notes: `Walk-in: ${selectedTreatment.name}`,
+    });
+
+    document.getElementById("modalOverlay")?.remove();
+    toast(`✓ Payment recorded — ${Math.floor(selectedTreatment.price / 10)} pts awarded`);
+
+    // Refresh customer list and re-open drawer
+    await renderCustomers(document.getElementById("customerSearch")?.value || "");
+    const { data: bookings } = await sb.from("bookings").select("customer_phone, customer_name, customer_email, booking_date, price_charged, status, voucher_id, voucher_discount, treatment_id, treatments(name)").order("booking_date", { ascending: false });
+    const { data: loyalty } = await sb.from("loyalty_balances").select("customer_phone, customer_name, balance");
+    const profileMap = {};
+    for (const b of (bookings || [])) {
+      if (!profileMap[b.customer_phone]) profileMap[b.customer_phone] = { phone: b.customer_phone, name: b.customer_name, email: b.customer_email || null, bookings: [], totalSpend: 0, lastBooking: b.booking_date };
+      const p = profileMap[b.customer_phone];
+      p.bookings.push(b);
+      if (b.status !== "cancelled") p.totalSpend += Number(b.price_charged || 0);
+    }
+    const loyaltyMap = {};
+    for (const l of (loyalty || [])) loyaltyMap[l.customer_phone] = Number(l.balance || 0);
+    const profiles = Object.values(profileMap).map(p => ({ ...p, points: loyaltyMap[p.phone] || 0 }));
+    openCustomerDrawer(customerPhone, profiles);
+  });
+}
+
 function initCustomersPanel() {
   // Search
   const search = document.getElementById("customerSearch");
@@ -987,12 +1241,61 @@ function initCustomersPanel() {
     });
   }
 
+  // Add new client
+  document.getElementById("addClientBtn")?.addEventListener("click", () => {
+    const modal = buildModal(`
+      <h3>Add new client</h3>
+      <label class="field-label">Full name</label>
+      <input class="field-input" id="ncName" placeholder="e.g. Jane Smith" style="width:100%">
+      <label class="field-label" style="margin-top:0.75rem">Phone number</label>
+      <input class="field-input" id="ncPhone" placeholder="e.g. 082 000 0000" style="width:100%">
+      <label class="field-label" style="margin-top:0.75rem">Email (optional)</label>
+      <input class="field-input" id="ncEmail" type="email" placeholder="jane@example.com" style="width:100%">
+      <p id="ncFeedback" style="font-size:0.85rem;color:#b3543f;margin-top:0.5rem"></p>
+      <div class="admin-modal-actions">
+        <button class="btn btn-ghost" data-action="close-modal">Cancel</button>
+        <button class="btn btn-primary" id="ncSaveBtn">Add client</button>
+      </div>
+    `);
+    modal.querySelector("#ncSaveBtn").addEventListener("click", async () => {
+      const name = modal.querySelector("#ncName").value.trim();
+      const phone = modal.querySelector("#ncPhone").value.trim().replace(/\s+/g, "");
+      const email = modal.querySelector("#ncEmail").value.trim();
+      if (!name || !phone) {
+        modal.querySelector("#ncFeedback").textContent = "Name and phone number are required.";
+        return;
+      }
+      // Create a minimal loyalty record so the customer shows up in the list
+      // even before their first booking
+      const { error } = await sb.from("loyalty_transactions").insert({
+        customer_phone: phone,
+        customer_name: name,
+        points_delta: 0,
+        reason: "manual_adjustment",
+        notes: email ? "Walk-in client added. Email: " + email : "Walk-in client added.",
+      });
+      if (error) {
+        modal.querySelector("#ncFeedback").textContent = "Could not save — please try again.";
+        return;
+      }
+      document.getElementById("modalOverlay")?.remove();
+      toast("Client added ✓");
+      renderCustomers();
+    });
+  });
+
   // Drawer close
   const drawer = document.getElementById("customerDrawer");
   document.getElementById("drawerClose")?.addEventListener("click", () => {
     drawer.hidden = true;
     drawer.style.display = "none";
     currentCustomerPhone = null;
+  });
+
+  document.getElementById("drawerPayBtn")?.addEventListener("click", () => {
+    if (!currentCustomerPhone) return;
+    const name = document.getElementById("drawerName").textContent;
+    openCashRegister(currentCustomerPhone, name);
   });
   drawer?.addEventListener("click", (e) => {
     if (e.target === drawer) {

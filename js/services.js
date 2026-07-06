@@ -27,6 +27,7 @@
       const card = document.createElement("article");
       card.className = "service-card";
       card.innerHTML = `
+        ${t.imageUrl ? `<div class="service-card-img"><img src="${t.imageUrl}" alt="${t.name} brochure" loading="lazy" style="width:100%;border-radius:8px 8px 0 0;display:block;max-height:220px;object-fit:cover"></div>` : ""}
         <div class="service-card-head">
           <h3 class="service-name">${t.name}</h3>
           <span class="service-price">${formatCurrency(t.price)}</span>
