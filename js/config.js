@@ -59,6 +59,6 @@ function buildDurationLabel(durationMinutes, sessionsCount) {
 // Get your free API key at https://api.imgbb.com/ (About menu → API)
 // This key is only used in the admin console which is password-protected.
 const IMGBB_CONFIG = {
-  apiKey: "", // ← paste your imgbb API key here
+  apiKey: "d58fb7dfb38f1354cbf62ac84cee1711", // ← paste your imgbb API key here
   uploadUrl: "https://api.imgbb.com/1/upload",
 };
