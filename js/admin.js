@@ -1,3 +1,29 @@
+
+// ── Brochure lightbox (admin) ──────────────────────────────────────────────
+// Shared lightbox for viewing treatment brochure images in the admin.
+// The public site has its own identical lightbox in index.html.
+function openAdminBrochure(src, name) {
+  let lb = document.getElementById('adminBrochureLb');
+  if (!lb) {
+    lb = document.createElement('div');
+    lb.id = 'adminBrochureLb';
+    lb.role = 'dialog';
+    lb.setAttribute('aria-modal', 'true');
+    lb.setAttribute('aria-label', 'Brochure image');
+    lb.style.cssText = 'display:none;position:fixed;inset:0;z-index:9000;background:rgba(20,10,5,0.88);align-items:center;justify-content:center;padding:1rem;cursor:zoom-out';
+    lb.innerHTML = '<button aria-label="Close" style="position:absolute;top:1rem;right:1.25rem;background:none;border:none;color:#fff;font-size:2.2rem;cursor:pointer;line-height:1;opacity:0.8">&times;</button><img style="max-width:min(92vw,900px);max-height:88vh;border-radius:8px;box-shadow:0 8px 48px rgba(0,0,0,.6);cursor:default;display:block" alt="">';
+    document.body.appendChild(lb);
+    const close = () => { lb.style.display='none'; document.body.style.overflow=''; };
+    lb.querySelector('button').addEventListener('click', close);
+    lb.addEventListener('click', (e) => { if (e.target === lb) close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && lb.style.display !== 'none') close(); });
+  }
+  lb.querySelector('img').src = src;
+  lb.querySelector('img').alt = name + ' brochure';
+  lb.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
 // ============================================
 // ADMIN CONSOLE LOGIC
 // ------------------------------------------------
@@ -90,14 +116,18 @@ async function renderTreatments(category) {
     const card = document.createElement("div");
     card.className = `admin-card${t.active === false ? " is-inactive" : ""}`;
     card.innerHTML = `
-      <div class="admin-card-body">
-        <p class="admin-card-name">${escapeHtml(t.name)}${
-          t.active === false ? '<span class="admin-pill">Hidden</span>' : '<span class="admin-pill is-on">Live</span>'
-        }</p>
-        <p class="admin-card-meta">R${Number(t.price).toLocaleString("en-ZA")}<span class="sep">&middot;</span>${escapeHtml(t.duration)}</p>
-        <p class="admin-card-desc">${t.duration} &middot; ${t.stations > 1 ? t.stations + " stations" : "1 station"} &middot; ${escapeHtml(t.desc || "")}</p>
+      <div style="display:flex;gap:0.75rem;width:100%">
+        ${t.imageUrl ? `<div style="flex-shrink:0;cursor:zoom-in" title="View brochure" onclick="openAdminBrochure('${t.imageUrl}','${t.name}')"><img src="${t.imageUrl}" alt="${t.name}" style="width:64px;height:64px;object-fit:cover;border-radius:6px;display:block"></div>` : ""}
+        <div class="admin-card-body" style="flex:1;min-width:0">
+          <p class="admin-card-name">${escapeHtml(t.name)}${
+            t.active === false ? '<span class="admin-pill">Hidden</span>' : '<span class="admin-pill is-on">Live</span>'
+          }</p>
+          <p class="admin-card-meta">R${Number(t.price).toLocaleString("en-ZA")}<span class="sep">&middot;</span>${escapeHtml(t.duration)}</p>
+          <p class="admin-card-desc">${t.stations > 1 ? t.stations + " stations" : "1 station"} &middot; ${escapeHtml(t.desc || "")}</p>
+        </div>
       </div>
-      <div class="admin-card-actions">
+      <div class="admin-card-actions" style="margin-top:0.5rem">
+        ${t.imageUrl ? `<button class="btn btn-ghost btn-sm" onclick="openAdminBrochure('${t.imageUrl}','${t.name}')">&#128247; View image</button>` : ""}
         <button class="btn btn-ghost btn-sm" data-action="edit-treatment" data-id="${t.id}">Edit</button>
         <button class="btn btn-ghost btn-sm" data-action="toggle-treatment" data-id="${t.id}">${t.active === false ? "Show" : "Hide"}</button>
         <button class="btn btn-ghost btn-sm" data-action="delete-treatment" data-id="${t.id}">Delete</button>
