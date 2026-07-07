@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S Sculpt — Admin Help</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brown: #3D2B1F;
+    --gold: #C9A24B;
+    --gold-pale: #F3ECE2;
+    --surface: #FAF6F0;
+    --border: #E5D9C8;
+    --text: #2B1B12;
+    --muted: #7A6A5A;
+    --green: #3A6B35;
+    --amber: #8B6000;
+    --red: #8B2020;
+    --radius: 10px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Inter, sans-serif; background: var(--surface); color: var(--text); font-size: 1rem; line-height: 1.6; }
+
+  .help-header {
+    background: var(--brown); color: #fff; padding: 1.25rem 1.5rem;
+    display: flex; align-items: center; gap: 1rem;
+    position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,.2);
+  }
+  .help-header .logo { font-family: Fraunces, serif; font-size: 1.2rem; font-weight: 700; color: var(--gold); text-decoration: none; }
+  .help-header .subtitle { font-size: 0.85rem; color: #C9BBA8; }
+  .help-header a.back { margin-left: auto; font-size: 0.85rem; color: var(--gold); text-decoration: none; }
+  .help-header a.back:hover { text-decoration: underline; }
+
+  .help-wrap { max-width: 780px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  .toc { background: var(--gold-pale); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; margin-bottom: 2.5rem; }
+  .toc h2 { font-family: Fraunces, serif; font-size: 1rem; color: var(--brown); margin-bottom: 0.75rem; }
+  .toc ol { padding-left: 1.25rem; column-count: 2; column-gap: 2rem; }
+  .toc li { margin-bottom: 0.3rem; break-inside: avoid; }
+  .toc a { color: var(--brown); font-size: 0.9rem; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  .help-section { margin-bottom: 3rem; scroll-margin-top: 5rem; }
+  .help-section h2 { font-family: Fraunces, serif; font-size: 1.5rem; font-weight: 700; color: var(--brown); border-bottom: 3px solid var(--gold); padding-bottom: 0.4rem; margin-bottom: 1rem; }
+  .help-section h3 { font-size: 1rem; font-weight: 700; color: var(--brown); margin: 1.25rem 0 0.5rem; border-left: 3px solid var(--gold); padding-left: 0.6rem; }
+  .help-section p { color: var(--text); margin-bottom: 0.75rem; font-size: 0.95rem; }
+  .help-section ul, .help-section ol { padding-left: 1.4rem; margin-bottom: 0.75rem; }
+  .help-section li { margin-bottom: 0.35rem; font-size: 0.95rem; }
+  .help-section strong { color: var(--brown); }
+
+  .tip  { background: #E8F5E4; border-left: 4px solid var(--green); color: #1E3A1A; border-radius: var(--radius); padding: 1rem 1.25rem; margin: 1rem 0; font-size: 0.9rem; }
+  .warn { background: #FFF8E1; border-left: 4px solid var(--gold); color: var(--amber); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 1rem 0; font-size: 0.9rem; }
+  .danger { background: #FDE8E8; border-left: 4px solid #B33; color: var(--red); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 1rem 0; font-size: 0.9rem; }
+  .info { background: var(--gold-pale); border-left: 4px solid var(--gold); color: var(--brown); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 1rem 0; font-size: 0.9rem; }
+  .tip strong, .warn strong, .danger strong, .info strong { display: block; margin-bottom: 0.35rem; }
+
+  .steps { list-style: none; padding: 0; counter-reset: steps; }
+  .steps li { counter-increment: steps; display: flex; gap: 1rem; margin-bottom: 0.9rem; }
+  .steps li::before { content: counter(steps); background: var(--brown); color: var(--gold); font-weight: 700; font-size: 0.85rem; min-width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 0.1rem; }
+  .steps .step-body { font-size: 0.9rem; }
+  .steps .step-body strong { color: var(--brown); display: block; margin-bottom: 0.15rem; }
+  .steps .step-body span { color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; }
+  th { background: var(--gold-pale); color: var(--brown); font-weight: 600; text-align: left; padding: 0.6rem 0.75rem; border: 1px solid var(--border); }
+  td { padding: 0.55rem 0.75rem; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: #FDFAF6; }
+
+  .panel-tag { display: inline-block; background: var(--brown); color: var(--gold); font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 4px; margin-right: 0.4rem; font-family: monospace; }
+</style>
+</head>
+<body>
+
+<header class="help-header">
+  <div>
+    <a class="logo" href="admin.html">S Sculpt Admin</a>
+    <p class="subtitle">Admin console guide — how to manage everything</p>
+  </div>
+  <a class="back" href="admin.html">← Back to admin</a>
+</header>
+
+<div class="help-wrap">
+
+  <div class="tip" style="margin-bottom:1.5rem"><strong>✅ You're in the right place</strong>This guide covers every panel in the admin console. Use the contents list below to jump straight to the section you need.</div>
+
+  <div class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#login">Logging in &amp; out</a></li>
+      <li><a href="#dashboard">Dashboard</a></li>
+      <li><a href="#bookings">Bookings</a></li>
+      <li><a href="#customers">Customers</a></li>
+      <li><a href="#vouchers">Vouchers</a></li>
+      <li><a href="#treatments">Treatments</a></li>
+      <li><a href="#specials">Specials</a></li>
+      <li><a href="#hours">Hours &amp; blocked dates</a></li>
+      <li><a href="#database">Database</a></li>
+    </ol>
+  </div>
+
+  <!-- LOGIN -->
+  <section class="help-section" id="login">
+    <h2>Logging in &amp; out</h2>
+    <p>Go to <strong>s-sculpt-web.pages.dev/admin.html</strong> and enter your email address and password, then click <strong>Sign in</strong>. The console opens to the Dashboard.</p>
+    <p><strong>Forgot your password?</strong> Contact your developer to reset it.</p>
+    <p><strong>Logging out:</strong> Click <strong>Log out</strong> at the bottom of the left sidebar. Always log out when you're finished, especially on a shared device.</p>
+    <div class="warn"><strong>⚠️ Keep your login safe</strong>Only you should know your password. If you think someone else has access, contact your developer immediately to reset your credentials.</div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section class="help-section" id="dashboard">
+    <h2><span class="panel-tag">Dashboard</span> Overview</h2>
+    <p>The first screen after logging in. Shows three summary numbers at a glance — total bookings, active treatments, and active specials. No editing happens here, it's purely a quick overview.</p>
+  </section>
+
+  <!-- BOOKINGS -->
+  <section class="help-section" id="bookings">
+    <h2><span class="panel-tag">Bookings</span> Managing appointments</h2>
+    <p>All bookings appear here — from the website and from the cash register. Most recent bookings are at the top.</p>
+
+    <h3>Reading a booking card</h3>
+    <table>
+      <tr><th>What you see</th><th>What it means</th></tr>
+      <tr><td><strong>Treatment name</strong></td><td>What was booked</td></tr>
+      <tr><td><span style="background:#6B8F5E;color:#fff;padding:2px 8px;border-radius:999px;font-size:0.8rem">Confirmed</span></td><td>Active booking — client is expected</td></tr>
+      <tr><td><span style="background:#aaa;color:#fff;padding:2px 8px;border-radius:999px;font-size:0.8rem">Cancelled</span></td><td>Booking was cancelled</td></tr>
+      <tr><td>🎁 Voucher used</td><td>A gift voucher was applied — shows how much was discounted</td></tr>
+      <tr><td>Date · time · price</td><td>When the appointment is and what was charged</td></tr>
+      <tr><td>Customer name · phone</td><td>Who booked</td></tr>
+      <tr><td><strong>Cancel button</strong></td><td>Cancels the booking — this cannot be undone</td></tr>
+    </table>
+
+    <h3>Cancelled bookings</h3>
+    <p>Cancelled bookings are hidden at the bottom behind a toggle — <em>"▶ X cancelled bookings — click to show"</em>. They're still there for your records, just kept out of the way.</p>
+
+    <div class="tip"><strong>💡 Walk-in payments</strong>Bookings from the website appear automatically. For walk-in or cash payments, use the Customers panel → select the customer → Process payment. This records the visit and awards loyalty points in one step.</div>
+    <div class="danger"><strong>⚠️ Cancellation is permanent</strong>Once you click Cancel on a booking it cannot be undone. Make sure before you click.</div>
+  </section>
+
+  <!-- CUSTOMERS -->
+  <section class="help-section" id="customers">
+    <h2><span class="panel-tag">Customers</span> Client profiles &amp; cash register</h2>
+    <p>Your full client list — everyone who has booked or been added manually. Search by name or phone number using the box at the top.</p>
+
+    <h3>Adding a new walk-in client</h3>
+    <ol class="steps">
+      <li><div class="step-body"><strong>Click "+ Add new client"</strong><span>Button is at the top right of the customer list.</span></div></li>
+      <li><div class="step-body"><strong>Enter their details</strong><span>Name and phone are required. Email is optional.</span></div></li>
+      <li><div class="step-body"><strong>Click Add client</strong><span>They appear in the list immediately, ready to use.</span></div></li>
+    </ol>
+
+    <h3>Viewing a customer profile</h3>
+    <p>Click anywhere on a customer card to open their profile drawer. The stats bar at the top shows their total bookings, total spend and current points balance. Three tabs:</p>
+    <table>
+      <tr><th>Tab</th><th>What you see</th></tr>
+      <tr><td><strong>Bookings</strong></td><td>Full booking history — treatment, date, amount, voucher use</td></tr>
+      <tr><td><strong>Loyalty</strong></td><td>Every points transaction — earned, adjusted, deducted — with date and reason</td></tr>
+      <tr><td><strong>Add points</strong></td><td>Manual points form — for walk-in Yoco payments, referrals, promotions or corrections</td></tr>
+    </table>
+
+    <h3>Processing a walk-in payment (cash register)</h3>
+    <ol class="steps">
+      <li><div class="step-body"><strong>Find the customer</strong><span>Search by name or phone. If they're new, add them first.</span></div></li>
+      <li><div class="step-body"><strong>Open their profile</strong><span>Click their card.</span></div></li>
+      <li><div class="step-body"><strong>Click "Process payment"</strong><span>Top right of the profile drawer.</span></div></li>
+      <li><div class="step-body"><strong>Select the treatment</strong><span>Price fills in automatically from the treatments list.</span></div></li>
+      <li><div class="step-body"><strong>Apply a voucher (optional)</strong><span>Enter the code and click Apply. Discount and remaining balance show immediately.</span></div></li>
+      <li><div class="step-body"><strong>Calculate change</strong><span>Enter the cash received. The change to give the customer appears automatically.</span></div></li>
+      <li><div class="step-body"><strong>Click Confirm payment</strong><span>The visit is recorded, voucher balance updated if used, and loyalty points awarded automatically (1 pt per R10 of treatment price).</span></div></li>
+    </ol>
+
+    <h3>Adding loyalty points manually</h3>
+    <p>Open the customer's profile → <strong>Add points tab</strong>. Enter the number of points (positive to add, negative to deduct), choose a reason from the dropdown, add a note if helpful, then click Add points.</p>
+    <table>
+      <tr><th>Reason</th><th>When to use it</th></tr>
+      <tr><td>Walk-in / Yoco payment</td><td>Customer paid cash or Yoco card machine — use the cash register instead when possible</td></tr>
+      <tr><td>Referral</td><td>Customer referred a friend who came in</td></tr>
+      <tr><td>Promotion</td><td>Bonus points as part of a special offer</td></tr>
+      <tr><td>Correction</td><td>Fixing a mistake in the points balance</td></tr>
+      <tr><td>Other</td><td>Anything else — add a note to explain</td></tr>
+    </table>
+  </section>
+
+  <!-- VOUCHERS -->
+  <section class="help-section" id="vouchers">
+    <h2><span class="panel-tag">Vouchers</span> Gift vouchers</h2>
+    <p>Vouchers are generated by you after receiving payment. Customers cannot generate their own. Each voucher has a unique code the recipient uses at checkout on the website.</p>
+
+    <h3>Generating a new voucher</h3>
+    <ol class="steps">
+      <li><div class="step-body"><strong>Fill in the details</strong><span>Amount (required), recipient name (required), from (optional), message (optional).</span></div></li>
+      <li><div class="step-body"><strong>Click "Generate voucher code"</strong><span>A unique code is created (e.g. SCULPT-GLOW-ROSE-247) and a branded image pops up showing the design.</span></div></li>
+      <li><div class="step-body"><strong>Share the image</strong><span>On your phone: tap Share to send directly via WhatsApp. On a computer: click Download image and attach it manually.</span></div></li>
+    </ol>
+
+    <h3>Voucher statuses</h3>
+    <table>
+      <tr><th>Status</th><th>Meaning</th></tr>
+      <tr><td><span style="background:#6B8F5E;color:#fff;padding:2px 8px;border-radius:999px;font-size:0.8rem">Active</span></td><td>Full balance available — hasn't been used yet</td></tr>
+      <tr><td><span style="background:#8B6000;color:#fff;padding:2px 8px;border-radius:999px;font-size:0.8rem">Partial</span></td><td>Been used but has a remaining balance (e.g. R150 remaining of R500)</td></tr>
+      <tr><td><span style="background:#aaa;color:#fff;padding:2px 8px;border-radius:999px;font-size:0.8rem">Redeemed</span></td><td>Fully used — collapsed at the bottom of the list</td></tr>
+    </table>
+
+    <div class="tip"><strong>💡 Partial vouchers</strong>If a R600 voucher is used on a R450 treatment, R150 stays on the same code. The customer uses the same code again for their next visit. You'll see "R150 remaining of R600" on the voucher card.</div>
+    <div class="warn"><strong>⚠️ Only generate after receiving payment</strong>Generating a voucher creates a real, usable code immediately. Only do this once you've received cash, EFT or card payment from the person buying the voucher.</div>
+  </section>
+
+  <!-- TREATMENTS -->
+  <section class="help-section" id="treatments">
+    <h2><span class="panel-tag">Treatments</span> Managing your services</h2>
+    <p>Controls what appears on the public site's treatment cards. Changes take effect immediately.</p>
+
+    <h3>Adding a new treatment</h3>
+    <ol class="steps">
+      <li><div class="step-body"><strong>Click "+ Add treatment"</strong><span></span></div></li>
+      <li><div class="step-body"><strong>Fill in the details</strong>
+        <span>
+          <strong>Name</strong> — what it's called on the site.<br>
+          <strong>Price</strong> — in rand (e.g. 450).<br>
+          <strong>Duration</strong> — how long one session takes in minutes.<br>
+          <strong>Sessions</strong> — number of sessions in the package (usually 1).<br>
+          <strong>Stations</strong> — how many machines you have for this treatment. Set to 1 unless you have multiple (e.g. 3 RF machines = enter 3). This allows multiple clients to book the same time slot.<br>
+          <strong>Description</strong> — shown on the treatment card. Keep it clear and informative.<br>
+          <strong>Category</strong> — Sculpt (body) or Face.
+        </span>
+      </div></li>
+      <li><div class="step-body"><strong>Upload a brochure image (optional)</strong><span>Click the file picker and choose a photo. It uploads automatically and appears on the treatment card on the public site. Customers can click the image to view it full-screen.</span></div></li>
+      <li><div class="step-body"><strong>Click Save</strong><span>The treatment appears on the public site immediately.</span></div></li>
+    </ol>
+
+    <h3>Editing an existing treatment</h3>
+    <p>Click <strong>Edit</strong> on any treatment card. Change whatever you need and click Save. To upload a new brochure image, just choose a new file — it replaces the old one.</p>
+
+    <h3>Hiding vs deleting</h3>
+    <table>
+      <tr><th>Action</th><th>What it does</th><th>When to use it</th></tr>
+      <tr><td><strong>Hide</strong></td><td>Removes from public site but keeps in your records</td><td>Temporarily unavailable treatment</td></tr>
+      <tr><td><strong>Delete</strong></td><td>Permanently removes the treatment</td><td>Only if you'll never offer it again</td></tr>
+    </table>
+    <div class="danger"><strong>⚠️ Deleting is permanent</strong>Past bookings for the treatment stay in the system, but the treatment itself is gone forever. Use Hide instead if you're unsure.</div>
+  </section>
+
+  <!-- SPECIALS -->
+  <section class="help-section" id="specials">
+    <h2><span class="panel-tag">Specials</span> Promotions ticker</h2>
+    <p>Controls the scrolling banner that runs across the public site. Add as many messages as you like — they all scroll one after another.</p>
+    <ul>
+      <li>Click <strong>Add special</strong> → type your message → Save</li>
+      <li>Toggle the switch on/off to show or hide a message without deleting it</li>
+      <li>Delete a message permanently with the bin icon</li>
+    </ul>
+    <div class="info"><strong>Ideas for specials</strong>"20% off all RF sessions in July" &nbsp;·&nbsp; "Refer a friend and earn 100 bonus points" &nbsp;·&nbsp; "Book 5 sessions, get 1 free" &nbsp;·&nbsp; "New: Face Rejuvenation packages available — ask us"</div>
+  </section>
+
+  <!-- HOURS -->
+  <section class="help-section" id="hours">
+    <h2><span class="panel-tag">Hours</span> Opening hours &amp; blocked dates</h2>
+    <p>Controls which dates and time slots are available to book on the public site.</p>
+
+    <h3>Setting opening hours</h3>
+    <ul>
+      <li>Toggle each day open or closed</li>
+      <li>Set opening and closing times for open days</li>
+      <li>Changes take effect immediately — no customer can book outside these hours</li>
+    </ul>
+
+    <h3>Blocking specific dates</h3>
+    <p>Use this to close the salon on specific days — public holidays, training, holidays, etc.</p>
+    <ol class="steps">
+      <li><div class="step-body"><strong>Enter the date</strong><span>Use the date picker in the blocked dates section.</span></div></li>
+      <li><div class="step-body"><strong>Click Add</strong><span>The date is blocked — customers will see it greyed out on the calendar.</span></div></li>
+      <li><div class="step-body"><strong>To unblock</strong><span>Click the × next to the date in the blocked dates list.</span></div></li>
+    </ol>
+  </section>
+
+  <!-- DATABASE -->
+  <section class="help-section" id="database">
+    <h2><span class="panel-tag">Database</span> Technical information</h2>
+    <p>This panel is for your developer. It shows the Supabase project ID, security policy details and database structure. You don't need to use this panel for day-to-day management — leave it alone.</p>
+  </section>
+
+</div>
+</body>
+</html>

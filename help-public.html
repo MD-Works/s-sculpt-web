@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S Sculpt — Website Help</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brown: #3D2B1F;
+    --gold: #C9A24B;
+    --gold-pale: #F3ECE2;
+    --surface: #FAF6F0;
+    --border: #E5D9C8;
+    --text: #2B1B12;
+    --muted: #7A6A5A;
+    --green: #3A6B35;
+    --amber: #8B6000;
+    --radius: 10px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Inter, sans-serif; background: var(--surface); color: var(--text); font-size: 1rem; line-height: 1.6; }
+
+  /* ── header ── */
+  .help-header {
+    background: var(--brown);
+    color: #fff;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,.2);
+  }
+  .help-header .logo { font-family: Fraunces, serif; font-size: 1.2rem; font-weight: 700; color: var(--gold); text-decoration: none; }
+  .help-header .subtitle { font-size: 0.85rem; color: #C9BBA8; }
+  .help-header a.back { margin-left: auto; font-size: 0.85rem; color: var(--gold); text-decoration: none; }
+  .help-header a.back:hover { text-decoration: underline; }
+
+  /* ── layout ── */
+  .help-wrap { max-width: 780px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  /* ── TOC ── */
+  .toc { background: var(--gold-pale); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; margin-bottom: 2.5rem; }
+  .toc h2 { font-family: Fraunces, serif; font-size: 1rem; color: var(--brown); margin-bottom: 0.75rem; }
+  .toc ol { padding-left: 1.25rem; }
+  .toc li { margin-bottom: 0.3rem; }
+  .toc a { color: var(--brown); font-size: 0.9rem; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* ── sections ── */
+  .help-section { margin-bottom: 3rem; scroll-margin-top: 5rem; }
+  .help-section h2 { font-family: Fraunces, serif; font-size: 1.5rem; font-weight: 700; color: var(--brown); border-bottom: 3px solid var(--gold); padding-bottom: 0.4rem; margin-bottom: 1rem; }
+  .help-section h3 { font-size: 1rem; font-weight: 700; color: var(--brown); margin: 1.25rem 0 0.5rem; }
+  .help-section p { color: var(--text); margin-bottom: 0.75rem; font-size: 0.95rem; }
+  .help-section ul, .help-section ol { padding-left: 1.4rem; margin-bottom: 0.75rem; }
+  .help-section li { margin-bottom: 0.35rem; font-size: 0.95rem; }
+  .help-section strong { color: var(--brown); }
+
+  /* ── callout boxes ── */
+  .tip, .warn, .info {
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  .tip { background: #E8F5E4; border-left: 4px solid var(--green); color: #1E3A1A; }
+  .warn { background: #FFF8E1; border-left: 4px solid var(--gold); color: var(--amber); }
+  .info { background: var(--gold-pale); border-left: 4px solid var(--gold); color: var(--brown); }
+  .tip strong, .warn strong, .info strong { display: block; margin-bottom: 0.35rem; }
+
+  /* ── step list ── */
+  .steps { list-style: none; padding: 0; counter-reset: steps; }
+  .steps li { counter-increment: steps; display: flex; gap: 1rem; margin-bottom: 0.75rem; }
+  .steps li::before { content: counter(steps); background: var(--brown); color: var(--gold); font-weight: 700; font-size: 0.85rem; min-width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 0.1rem; }
+  .steps .step-body { font-size: 0.9rem; }
+  .steps .step-body strong { color: var(--brown); display: block; }
+  .steps .step-body span { color: var(--muted); }
+
+  /* ── table ── */
+  table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; }
+  th { background: var(--gold-pale); color: var(--brown); font-weight: 600; text-align: left; padding: 0.6rem 0.75rem; border: 1px solid var(--border); }
+  td { padding: 0.55rem 0.75rem; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: #FDFAF6; }
+
+  /* ── tier badges ── */
+  .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600; }
+  .badge-bronze { background: #C97D4B22; color: #7A3D10; }
+  .badge-silver { background: #88888822; color: #444; }
+  .badge-gold   { background: #C9A24B22; color: #7A6000; }
+</style>
+</head>
+<body>
+
+<header class="help-header">
+  <div>
+    <a class="logo" href="index.html">S Sculpt</a>
+    <p class="subtitle">Website help — what your customers see</p>
+  </div>
+  <a class="back" href="index.html">← Back to site</a>
+</header>
+
+<div class="help-wrap">
+
+  <div class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#nav">Navigation bar</a></li>
+      <li><a href="#hero">Hero section</a></li>
+      <li><a href="#treatments">Treatments</a></li>
+      <li><a href="#specials">Specials banner</a></li>
+      <li><a href="#booking">Booking form</a></li>
+      <li><a href="#loyalty">Loyalty points</a></li>
+      <li><a href="#findus">Find us</a></li>
+    </ol>
+  </div>
+
+  <!-- NAV -->
+  <section class="help-section" id="nav">
+    <h2>Navigation bar</h2>
+    <p>The bar at the top of every page lets customers jump to any section. On a phone it collapses into a ☰ menu button — they tap it to see the links.</p>
+    <table>
+      <tr><th>Link</th><th>Where it takes them</th></tr>
+      <tr><td><strong>Treatments</strong></td><td>The treatment cards — each shows name, price, duration and description</td></tr>
+      <tr><td><strong>Specials</strong></td><td>The scrolling promotions banner (you manage these in the admin)</td></tr>
+      <tr><td><strong>Loyalty</strong></td><td>The loyalty points checker — they enter their phone number to see their balance</td></tr>
+      <tr><td><strong>Find us</strong></td><td>Map, address, phone number and WhatsApp button</td></tr>
+      <tr><td><strong>WhatsApp us</strong></td><td>Opens a WhatsApp chat with the salon directly</td></tr>
+      <tr><td><strong>Book now</strong></td><td>Scrolls to the booking form</td></tr>
+    </table>
+  </section>
+
+  <!-- HERO -->
+  <section class="help-section" id="hero">
+    <h2>Hero section</h2>
+    <p>The big opening banner — the first thing every visitor sees. Shows the salon name, tagline, your Google rating and two buttons: <strong>Book now</strong> and <strong>WhatsApp us</strong>.</p>
+    <div class="info"><strong>About the Google rating</strong>The 4.9 ⭐ rating shown here comes from your real Google Business listing, so it's a trustworthy figure for customers.</div>
+  </section>
+
+  <!-- TREATMENTS -->
+  <section class="help-section" id="treatments">
+    <h2>Treatments</h2>
+    <p>Shows all your active treatments as cards, split into two tabs: <strong>Sculpt</strong> (body treatments) and <strong>Face</strong> (facial treatments). Each card shows:</p>
+    <ul>
+      <li>A brochure image — if you've uploaded one in the admin</li>
+      <li>Treatment name and price</li>
+      <li>Duration and session count</li>
+      <li>Short description</li>
+      <li>A <strong>Book this</strong> button that opens the booking form with that treatment pre-selected</li>
+    </ul>
+    <div class="tip"><strong>💡 Viewing the brochure image</strong>Customers can click or tap the treatment image to open it full-screen for a closer look. They tap anywhere outside the image or press × to close it.</div>
+    <div class="info"><strong>Keeping treatments current</strong>Add, edit or hide treatments at any time in the admin console → Treatments. Changes show on the site immediately.</div>
+  </section>
+
+  <!-- SPECIALS -->
+  <section class="help-section" id="specials">
+    <h2>Specials banner</h2>
+    <p>A scrolling ticker that runs between the treatments and booking sections. It shows whatever promotional messages you've added in the admin under <strong>Specials</strong>.</p>
+    <p>It scrolls automatically, loops continuously, and pauses when a customer hovers over it on desktop. You can add as many messages as you like.</p>
+  </section>
+
+  <!-- BOOKING -->
+  <section class="help-section" id="booking">
+    <h2>Booking form</h2>
+    <p>Customers work through four steps to make a booking:</p>
+    <ol class="steps">
+      <li>
+        <div class="step-body">
+          <strong>Choose a treatment and date</strong>
+          <span>They pick a treatment from the dropdown, then a date from the calendar. Only open days are selectable — closed days and blocked dates are greyed out.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <strong>Choose a time slot</strong>
+          <span>Available slots appear automatically based on your opening hours and existing bookings. Fully booked slots don't appear. If a treatment has multiple machines (e.g. 3 RF machines), up to 3 customers can book the same slot.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <strong>Enter their details</strong>
+          <span>Name and phone are required. Email is optional. They can also enter a gift voucher code here — the discount applies automatically. If the voucher has more value than the treatment price, the leftover balance stays on the code for next time.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <strong>Confirm</strong>
+          <span>They review the summary and click Confirm booking. The booking is saved instantly and appears in your admin console under Bookings. Loyalty points are added automatically.</span>
+        </div>
+      </li>
+    </ol>
+    <div class="warn"><strong>⚠️ After a customer books</strong>The booking appears in your admin immediately. Loyalty points are awarded automatically (1 point per R10 of the treatment price). Voucher balances update automatically if a code was used.</div>
+  </section>
+
+  <!-- LOYALTY -->
+  <section class="help-section" id="loyalty">
+    <h2>Loyalty points</h2>
+    <p>Customers check their balance by entering the phone number they used when booking. The page shows their current points, tier and how far they are from the next tier.</p>
+    <table>
+      <tr><th>Tier</th><th>Points needed</th><th>Benefit</th></tr>
+      <tr><td><span class="badge badge-bronze">🥉 Bronze</span></td><td>0 – 199 pts</td><td>Entry level — 1 pt per R10 spent</td></tr>
+      <tr><td><span class="badge badge-silver">🥈 Silver</span></td><td>200 – 499 pts</td><td>10% off add-ons</td></tr>
+      <tr><td><span class="badge badge-gold">🥇 Gold</span></td><td>500+ pts</td><td>Priority booking + exclusive specials</td></tr>
+    </table>
+    <div class="tip"><strong>💡 How points are earned</strong>Points are based on the full treatment price — even if a voucher was used to pay. Walk-in / cash payments: you add points manually in the admin under Customers → Add points tab.</div>
+  </section>
+
+  <!-- FIND US -->
+  <section class="help-section" id="findus">
+    <h2>Find us</h2>
+    <p>Shows the salon address, opening hours, phone number, email and a live Google Maps embed pinned to the exact S Sculpt location. There's also a <strong>Chat on WhatsApp</strong> button that opens a direct conversation.</p>
+    <table>
+      <tr><th>Detail</th><th></th></tr>
+      <tr><td><strong>Address</strong></td><td>Palm Springs Shopping Centre, 30 Christoffel Street, Van Riebeeck Park, Kempton Park</td></tr>
+      <tr><td><strong>Hours</strong></td><td>Monday – Saturday, 09:00 – 17:00</td></tr>
+      <tr><td><strong>Phone</strong></td><td>067 898 9347</td></tr>
+      <tr><td><strong>Email</strong></td><td>ssculpt71@gmail.com</td></tr>
+    </table>
+  </section>
+
+</div>
+</body>
+</html>
